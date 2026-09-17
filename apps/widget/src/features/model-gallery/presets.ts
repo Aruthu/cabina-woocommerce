@@ -1,0 +1,89 @@
+/**
+ * Story 12.2 — Libreria modelle predefinite (AC2).
+ *
+ * Metadata tipizzato per il set di modelle con corporature eterogenee,
+ * servite come asset statici del widget su CDN Cabina (stesso `baseUrl` del
+ * widget, path `/models/...`). Le immagini NON sono inline nel bundle JS e NON
+ * provengono da un endpoint backend (Task 1.1/1.2, AC2): il plugin `copyModels`
+ * di `vite.config.ts` le copia in `dist/models/` esattamente come già avviene
+ * per i locale JSON (`copyLocales`).
+ *
+ * Gli `id` sono COSTANTI e stabili — nei test si referenzia sempre `PRESET_MODELS`
+ * anziché stringhe duplicate (Task 1.4). Le immagini sono sostituibili: basta
+ * sovrascrivere il file in `src/models/` senza toccare questo metadata, finché
+ * `id`/`assetPath` restano stabili.
+ *
+ * 2026-07-26: i placeholder SVG sono stati sostituiti da **fotografie raster**
+ * (le silhouette vettoriali erano rifiutate dal motore generativo, che pretende
+ * una foto vera) e la galleria è stata riaccesa — vedi `MODEL_GALLERY_ENABLED`
+ * in `widget.ts`. Nella stessa passata il set è raddoppiato a **8 modelli**:
+ * le 4 corporature per entrambi i generi, perché con sole modelle femminili un
+ * negozio di abbigliamento maschile non aveva nulla da mostrare.
+ */
+
+/** Corporature eterogenee del set (AC2: "small but clearly heterogeneous"). */
+export type BodyType = 'slim' | 'regular' | 'curvy' | 'plus';
+
+/** Asse aggiunto il 2026-07-26 insieme al set maschile. */
+export type ModelGender = 'female' | 'male';
+
+export interface PresetModel {
+  /** Identificatore stabile `{gender}-{bodyType}`, usato nei test e come
+   *  attributo DOM. Mai cambiarlo senza bumpare i test. */
+  id: string;
+  gender: ModelGender;
+  /** Etichetta di corporatura, per eventuale logica futura. */
+  bodyType: BodyType;
+  /** Chiave i18n dell'etichetta mostrata sotto la miniatura (la sola corporatura:
+   *  il genere è già dato dall'intestazione del gruppo e dalla foto stessa). */
+  labelKey: string;
+  /** Path relativo al `baseUrl` del widget (es. '/models/model-female-slim.jpg').
+   *  È l'immagine **inviata al motore**: JPEG 768x1154, ~150 KB. Risolto da
+   *  `fetchModelAsDataUrl` in `model-gallery.ts`. Non ricomprimerla oltre né
+   *  scendere sotto i 576px di larghezza, che è il minimo che FASHN gestisce bene. */
+  assetPath: string;
+  /** Path della **miniatura** (128px, ~5 KB) usata nella griglia. Esiste perché
+   *  la card mostra l'immagine a 44x88 CSS: senza, aprire la galleria a 8 voci
+   *  scaricherebbe 1,2 MB di foto piene per disegnare otto francobolli. */
+  thumbPath: string;
+}
+
+function preset(gender: ModelGender, bodyType: BodyType, labelKey: string): PresetModel {
+  const id = `${gender}-${bodyType}`;
+  return {
+    id,
+    gender,
+    bodyType,
+    labelKey,
+    assetPath: `/models/model-${id}.jpg`,
+    thumbPath: `/models/model-${id}-thumb.jpg`,
+  };
+}
+
+/**
+ * Set di 8 modelle: 4 corporature (slim / regular / curvy / plus) per genere.
+ * La galleria le raggruppa per genere e renderizza una miniatura per voce (Task 4.3).
+ *
+ * Le corporature femminili riusano le etichette neutre; il maschile ha una chiave
+ * dedicata per `curvy`, che in italiano come in inglese è un termine femminile:
+ * applicarlo a un uomo sarebbe una traduzione sciatta, non una scorciatoia.
+ */
+export const PRESET_MODELS: readonly PresetModel[] = [
+  preset('female', 'slim', 'model_gallery.body_slim'),
+  preset('female', 'regular', 'model_gallery.body_regular'),
+  preset('female', 'curvy', 'model_gallery.body_curvy'),
+  preset('female', 'plus', 'model_gallery.body_plus'),
+  preset('male', 'slim', 'model_gallery.body_slim'),
+  preset('male', 'regular', 'model_gallery.body_regular'),
+  preset('male', 'curvy', 'model_gallery.body_curvy_male'),
+  preset('male', 'plus', 'model_gallery.body_plus'),
+];
+
+/** Chiave i18n dell'intestazione di gruppo, per genere. */
+export const GENDER_LABEL_KEYS: Record<ModelGender, string> = {
+  female: 'model_gallery.gender_female',
+  male: 'model_gallery.gender_male',
+};
+
+/** Generi presenti nel set, nell'ordine di rendering. */
+export const MODEL_GENDERS: readonly ModelGender[] = ['female', 'male'];

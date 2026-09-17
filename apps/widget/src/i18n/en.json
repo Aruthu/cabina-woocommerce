@@ -1,0 +1,113 @@
+{
+  "common": {
+    "back": "Back"
+  },
+  "error": {
+    "timeout": "Request timed out — try again",
+    "invalid_api_key": "Invalid API key",
+    "internal_error": "Internal error — try again later",
+    "invalid_json": "Invalid server response",
+    "config_not_loaded": "Configuration not loaded"
+  },
+  "photo": {
+    "title": "Your Photo",
+    "posture_hint": "Stand upright, facing the camera: arms down by your sides and hands visible, never in your pockets.",
+    "upload_button": "Upload photo",
+    "file_too_large": "File too large, maximum 10MB",
+    "unsupported_format": "Unsupported format — use JPEG, PNG or WebP",
+    "heic_not_supported": "HEIC files aren't supported — take a photo or convert it to JPEG",
+    "quality_optimal": "Excellent",
+    "quality_sufficient": "Sufficient",
+    "quality_low": "Low",
+    "consent_text": "I consent to my photo being sent to external AI services — PrunaAI (United States) to generate the try-on, and Novita AI (United States) to estimate my measurements and to check that the garment in the result is the real one — and I accept the {termini} and the {privacy}.",
+    "consent_terms_label": "Terms and Conditions",
+    "consent_privacy_label": "Privacy Notice",
+    "consent_required": "Accept the terms and conditions and the privacy policy to upload your photo"
+  },
+  "form": {
+    "title": "Your Measurements",
+    "height": "Height (cm)",
+    "weight": "Weight (kg) - optional",
+    "bust": "Bust (cm)",
+    "waist": "Waist (cm)",
+    "hips": "Hips (cm)",
+    "confirm": "Confirm measurements",
+    "cancel": "Cancel",
+    "auto_detected": "Auto-detected — you can edit",
+    "detection_failed": "Could not detect measurements — enter them manually or continue without",
+    "detection_unavailable": "Automatic estimate unavailable right now — try again or enter your measurements",
+    "detecting": "Detecting measurements...",
+    "detecting_ai": "AI analysis in progress...",
+    "ai_detected": "Measurements estimated by AI — you can edit them",
+    "invalid_height": "Height: enter a value between 100 and 220 cm",
+    "invalid_weight": "Weight: enter a value between 30 and 250 kg",
+    "invalid_bust": "Bust: enter a value between 50 and 200 cm",
+    "invalid_waist": "Waist: enter a value between 50 and 200 cm",
+    "invalid_hips": "Hips: enter a value between 50 and 200 cm",
+    "height_calibration_hint": "Enter your height for more accurate measurements",
+    "confirm_and_try": "Confirm and try on",
+    "foot": "Foot length (cm) - optional",
+    "invalid_foot": "Foot length: enter a value between 15 and 40 cm"
+  },
+  "rendering": {
+    "loading": "Processing...",
+    "unavailable": "Try-on failed. Please try again in a moment.",
+    "quota_exceeded": "This shop has used up its try-ons for this month. Please come back later.",
+    "consent_required": "Without your consent we can't generate the try-on from your photo. You can try the item on a Cabina model instead — no photo needed."
+  },
+  "tryon": {
+    "close": "Close",
+    "rotate_hint": "Drag to rotate"
+  },
+  "size": {
+    "recommended": "Recommended size",
+    "recommended_label": "Recommended Size",
+    "not_available": "Recommended size not available",
+    "between": "Between {{size1}} and {{size2}} — we recommend {{recommended}} for better comfort",
+    "confidence_score": "{{score}}% confidence"
+  },
+  "browser": {
+    "unsupported_title": "Update your browser to use Cabina",
+    "unsupported_message": "Your browser does not support the required features. We require Safari iOS 16+, Chrome Android 100+, or a recent version of Chrome, Firefox, Safari or Edge on desktop.",
+    "update_link_text": "Learn how to update"
+  },
+  "garment": {
+    "not_clothing_note": "Note: this product may not support full virtual try-on"
+  },
+  "model_gallery": {
+    "or_label": "or",
+    "title": "Choose a model",
+    "subtitle": "Try the item on a model with a similar body type — no photo needed",
+    "gender_female": "Women",
+    "gender_male": "Men",
+    "body_slim": "Slim",
+    "body_regular": "Regular",
+    "body_curvy": "Curvy",
+    "body_curvy_male": "Broad",
+    "body_plus": "Plus",
+    "load_error": "Couldn't load the model, try again or use your photo"
+  },
+  "garment_select": {
+    "title": "What are you trying on?",
+    "default_action": "Try in Cabina",
+    "browse_label": "Or browse collections",
+    "add_to_mix": "Add to mix",
+    "remove": "Remove",
+    "apply": "Apply",
+    "mix_limit_reached": "Maximum 3 items per outfit",
+    "loading": "Loading catalog...",
+    "error": "Catalog unavailable"
+  },
+  "reveal_result": {
+    "save": "Save",
+    "share": "Share",
+    "report": "Report",
+    "report_confirm": "Thanks for your feedback",
+    "select_style_label": "Browse other items",
+    "slider_label": "Comparison slider",
+    "original_alt": "Original photo",
+    "generated_alt": "Try-on result",
+    "drag_hint": "Drag to compare",
+    "add_to_cart": "Add to cart"
+  }
+}

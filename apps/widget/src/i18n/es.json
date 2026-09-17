@@ -1,0 +1,113 @@
+{
+  "common": {
+    "back": "Atrás"
+  },
+  "error": {
+    "timeout": "Tiempo de espera agotado — inténtalo de nuevo",
+    "invalid_api_key": "Clave API no válida",
+    "internal_error": "Error interno — inténtalo más tarde",
+    "invalid_json": "Respuesta del servidor no válida",
+    "config_not_loaded": "Configuración no cargada"
+  },
+  "photo": {
+    "title": "Tu foto",
+    "posture_hint": "De pie, erguido, de frente a la cámara: brazos a los lados y manos a la vista, nunca en los bolsillos.",
+    "upload_button": "Subir foto",
+    "file_too_large": "Archivo demasiado grande, máximo 10MB",
+    "unsupported_format": "Formato no soportado — usa JPEG, PNG o WebP",
+    "heic_not_supported": "Formato HEIC no soportado — haz una foto o conviértela a JPEG",
+    "quality_optimal": "Excelente",
+    "quality_sufficient": "Suficiente",
+    "quality_low": "Baja",
+    "consent_text": "Doy mi consentimiento para enviar mi foto a servicios de IA externos — PrunaAI (Estados Unidos) para generar la prueba, y Novita AI (Estados Unidos) para estimar mis medidas y comprobar que la prenda del resultado sea la real — y acepto los {termini} y la {privacy}.",
+    "consent_terms_label": "Términos y condiciones",
+    "consent_privacy_label": "Política de privacidad",
+    "consent_required": "Acepta los términos y condiciones y la política de privacidad para subir tu foto"
+  },
+  "form": {
+    "title": "Tus medidas",
+    "height": "Altura (cm)",
+    "weight": "Peso (kg) - opcional",
+    "bust": "Busto (cm)",
+    "waist": "Cintura (cm)",
+    "hips": "Cadera (cm)",
+    "confirm": "Confirmar medidas",
+    "cancel": "Cancelar",
+    "auto_detected": "Detectado automáticamente — puedes editar",
+    "detection_failed": "No se pudieron detectar las medidas — ingrésalas manualmente o continúa sin ellas",
+    "detection_unavailable": "Estimación automática no disponible en este momento — vuelve a intentarlo o introduce tus medidas",
+    "detecting": "Detectando medidas...",
+    "detecting_ai": "Análisis de IA en curso...",
+    "ai_detected": "Medidas estimadas por IA — puedes editarlas",
+    "invalid_height": "Altura: ingresa un valor entre 100 y 220 cm",
+    "invalid_weight": "Peso: ingresa un valor entre 30 y 250 kg",
+    "invalid_bust": "Busto: ingresa un valor entre 50 y 200 cm",
+    "invalid_waist": "Cintura: ingresa un valor entre 50 y 200 cm",
+    "invalid_hips": "Cadera: ingresa un valor entre 50 y 200 cm",
+    "height_calibration_hint": "Ingresa tu altura para medidas más precisas",
+    "confirm_and_try": "Confirmar y probar",
+    "foot": "Longitud del pie (cm) - opcional",
+    "invalid_foot": "Pie: ingresa un valor entre 15 y 40 cm"
+  },
+  "rendering": {
+    "loading": "Procesando...",
+    "unavailable": "La prueba no se ha completado. Inténtalo de nuevo en un momento.",
+    "quota_exceeded": "Las pruebas disponibles para esta tienda se han agotado este mes. Vuelve más adelante.",
+    "consent_required": "Sin tu consentimiento no podemos generar la prueba con tu foto. Puedes probar la prenda en una modelo de Cabina: no hace falta ninguna foto."
+  },
+  "tryon": {
+    "close": "Cerrar",
+    "rotate_hint": "Arrastra para girar"
+  },
+  "size": {
+    "recommended": "Talla recomendada",
+    "recommended_label": "Talla Recomendada",
+    "not_available": "Talla recomendada no disponible",
+    "between": "Entre {{size1}} y {{size2}} — recomendamos {{recommended}} para mayor comodidad",
+    "confidence_score": "{{score}}% de confianza"
+  },
+  "browser": {
+    "unsupported_title": "Actualiza tu navegador para usar Cabina",
+    "unsupported_message": "Tu navegador no soporta las funciones necesarias. Requerimos Safari iOS 16+, Chrome Android 100+, o una versión reciente de Chrome, Firefox, Safari o Edge en escritorio.",
+    "update_link_text": "Descubre cómo actualizar"
+  },
+  "garment": {
+    "not_clothing_note": "Nota: este producto puede no ser compatible con el probador virtual completo"
+  },
+  "model_gallery": {
+    "or_label": "o",
+    "title": "Elige quién lo lleva",
+    "subtitle": "Prueba la prenda en una persona de complexión similar — no necesitas foto",
+    "gender_female": "Mujer",
+    "gender_male": "Hombre",
+    "body_slim": "Slim",
+    "body_regular": "Regular",
+    "body_curvy": "Curvy",
+    "body_curvy_male": "Robusto",
+    "body_plus": "Plus",
+    "load_error": "No se pudo cargar el modelo, inténtalo de nuevo o usa tu foto"
+  },
+  "garment_select": {
+    "title": "¿Qué te pruebas?",
+    "default_action": "Probar en Cabina",
+    "browse_label": "O explora las colecciones",
+    "add_to_mix": "Añadir al mix",
+    "remove": "Quitar",
+    "apply": "Aplicar",
+    "mix_limit_reached": "Máximo 3 prendas por conjunto",
+    "loading": "Cargando catálogo...",
+    "error": "Catálogo no disponible"
+  },
+  "reveal_result": {
+    "save": "Guardar",
+    "share": "Compartir",
+    "report": "Reportar",
+    "report_confirm": "Gracias por tu reporte",
+    "select_style_label": "Explorar otras prendas",
+    "slider_label": "Control deslizante de comparación",
+    "original_alt": "Foto original",
+    "generated_alt": "Resultado del try-on",
+    "drag_hint": "Desliza para comparar",
+    "add_to_cart": "Añadir al carrito"
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "name": "cabina-woocommerce",
+  "private": true,
+  "license": "GPL-2.0-or-later",
+  "workspaces": [
+    "apps/widget",
+    "packages/shared"
+  ],
+  "scripts": {
+    "build:plugin": "npm run build:plugin -w apps/widget"
+  }
+}

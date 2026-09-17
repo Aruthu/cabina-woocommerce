@@ -1,0 +1,25 @@
+{
+  "name": "@cabina/widget",
+  "version": "0.0.1",
+  "private": true,
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build && node ../../scripts/generate-sri.mjs dist/widget.iife.js --write",
+    "build:plugin": "tsc --noEmit && vite build --minify false --outDir ../plugins/woocommerce/assets",
+    "lint": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "preview": "vite preview"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@vitest/coverage-v8": "^4.0.0",
+    "jsdom": "^29.1.1",
+    "typescript": "^5.4.0",
+    "vite": "^7.0.0",
+    "vitest": "^4.0.0"
+  },
+  "dependencies": {
+    "@cabina/shared": "*"
+  }
+}
