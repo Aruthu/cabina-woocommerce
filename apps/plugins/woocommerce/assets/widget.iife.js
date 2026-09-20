@@ -3574,7 +3574,8 @@
   ZodPromise.create;
   ZodOptional.create;
   ZodNullable.create;
-  const SUPPORTED_LANGUAGES$1 = ["it", "en", "fr", "es", "de"];
+  const SUPPORTED_LANGUAGES = ["it", "en", "fr", "es", "de", "ja", "pt-BR", "id"];
+  const WIDGET_LANGUAGES = SUPPORTED_LANGUAGES;
   objectType({
     heightCm: numberType().min(100).max(220),
     weightKg: numberType().min(30).max(250).optional(),
@@ -3590,7 +3591,7 @@
     primaryColor: stringType().regex(/^#[0-9A-Fa-f]{6}$/),
     buttonText: stringType().min(1).max(30),
     enabledCategories: arrayType(stringType()),
-    defaultLanguage: enumType(SUPPORTED_LANGUAGES$1).default("en")
+    defaultLanguage: enumType(WIDGET_LANGUAGES).default("en")
   });
   const SizeTableCategorySchema = enumType(["top", "bottom", "dress", "outerwear", "footwear"]);
   const SizeTableRowSchema = objectType({
@@ -3994,33 +3995,32 @@
       return { ok: false, errorCode: "INTERNAL_ERROR" };
     }
   }
-  const SUPPORTED_LANGUAGES = ["it", "en", "fr", "es", "de"];
   const localeCache = /* @__PURE__ */ new Map();
   const inFlightLocales = /* @__PURE__ */ new Map();
   let currentLocale = null;
   let currentLocaleLang = null;
-  function extractPrimaryTag(lang) {
-    return lang.split("-")[0]?.toLowerCase() ?? "";
-  }
-  function isSupported(tag) {
-    return SUPPORTED_LANGUAGES.includes(tag);
+  function linguaDelWidget(tag) {
+    const primary = tag.split("-")[0]?.toLowerCase() ?? "";
+    if (primary === "pt") return "pt-BR";
+    if (primary === "in") return "id";
+    return WIDGET_LANGUAGES.includes(primary) ? primary : null;
   }
   function resolveLanguage(defaultLanguage) {
     if (typeof document !== "undefined" && document.documentElement) {
       const docLang = document.documentElement.lang;
       if (docLang) {
-        const primary = extractPrimaryTag(docLang);
-        if (isSupported(primary)) return primary;
+        const lingua = linguaDelWidget(docLang);
+        if (lingua) return lingua;
       }
     }
     if (typeof navigator !== "undefined") {
       const navLang = navigator.language;
       if (navLang) {
-        const primary = extractPrimaryTag(navLang);
-        if (isSupported(primary)) return primary;
+        const lingua = linguaDelWidget(navLang);
+        if (lingua) return lingua;
       }
     }
-    if (isSupported(defaultLanguage)) return defaultLanguage;
+    if (WIDGET_LANGUAGES.includes(defaultLanguage)) return defaultLanguage;
     return "en";
   }
   async function loadLocale(lang, baseUrl) {
@@ -4064,9 +4064,9 @@
   function getCurrentLanguage() {
     return currentLocaleLang;
   }
-  function getLocaleStringOr(key, fallbackKey) {
-    const value = getLocaleString(key);
-    return value === key ? getLocaleString(fallbackKey) : value;
+  function getLocaleStringOr(key, fallbackKey, vars) {
+    const value = getLocaleString(key, vars);
+    return value === key ? getLocaleString(fallbackKey, vars) : value;
   }
   function getLocaleString(key, vars) {
     if (!currentLocale) return key;
@@ -4113,7 +4113,7 @@
         return context;
       case "form":
         if (event.type === "MEASURES_CONFIRMED") {
-          const base = { ...context, measures: event.measures, measureSource: event.measureSource ?? "manual" };
+          const base = { ...context, measures: event.measures, measureSource: event.measureSource ?? "manual", fit: event.fit ?? "regular" };
           return event.garments && event.garments.length > 0 ? { ...base, state: "rendering", selectedGarments: event.garments, error: null } : { ...base, state: "garment_select" };
         }
         if (event.type === "BACK") return { ...context, state: "photo", photoData: null, identityMode: null, error: null };
@@ -4298,11 +4298,11 @@
       img.src = dataUrl;
     });
   }
-  const PHOTO_MAX_EDGE_PX = 1600;
+  const PHOTO_MAX_EDGE_PX = 2048;
   const MEASURE_MAX_EDGE_PX = 1024;
   const PHOTO_JPEG_QUALITY = 0.85;
   const PHOTO_WEBP_QUALITY = 0.85;
-  const DATA_URL_SAFE_LENGTH = 12e5;
+  const DATA_URL_SAFE_LENGTH = 4e6;
   function fitWithinMaxEdge(width, height, maxEdge = PHOTO_MAX_EDGE_PX) {
     const longest = Math.max(width, height);
     if (longest <= maxEdge || longest <= 0) return { width, height };
@@ -4598,6 +4598,38 @@
     }
     return out;
   }
+  const CON_SESSO = {
+    bust: [16.20876, 0.1779, 0.11905, 1.62536, -1.66086, 0.03597, -0.01659],
+    waistOmbelico: [11.32753, 0.07978, 0.24644, 1.76782, -5.74148, 0.0335, -0.01689],
+    hips: [11.66154, 0.26867, 0.15013, 1.43309, -9.37653, 0.03628, -0.0749]
+  };
+  const SENZA_SESSO = {
+    bust: [-27.35888, 0.4423, -0.04132, 2.1148],
+    waistOmbelico: [21.36806, 0.02579, 0.26898, 1.63968],
+    hips: [86.26947, -0.15402, 0.26835, 0.76956]
+  };
+  const RAPPORTO_VITA = {
+    female: [0.9911, -3101e-6],
+    male: [1.04178, -2611e-6]
+  };
+  const BMI_MIN = 15;
+  const BMI_MAX = 50;
+  function applica(coef, x) {
+    return coef.reduce((somma, c, i) => somma + c * (x[i] ?? 0), 0);
+  }
+  function misureDaAltezzaPeso(heightCm, weightKg, sesso) {
+    if (!(heightCm >= 140 && heightCm <= 210 && weightKg >= 35 && weightKg <= 200)) return null;
+    const bmi = weightKg / (heightCm / 100) ** 2;
+    if (bmi < BMI_MIN || bmi > BMI_MAX) return null;
+    const base = [1, heightCm, weightKg, bmi];
+    const [x, coef] = sesso ? [[...base, ...sesso === "male" ? [1, heightCm, weightKg] : [0, 0, 0]], CON_SESSO] : [base, SENZA_SESSO];
+    const [a, b] = sesso ? RAPPORTO_VITA[sesso] : [0, 1].map((i) => (RAPPORTO_VITA.female[i] + RAPPORTO_VITA.male[i]) / 2);
+    return {
+      bustCm: Math.round(applica(coef.bust, x)),
+      waistCm: Math.round(applica(coef.waistOmbelico, x) * (a + b * bmi)),
+      hipsCm: Math.round(applica(coef.hips, x))
+    };
+  }
   const FIELD_CONFIG = {
     heightCm: { label: "", placeholder: "170", min: 100, max: 220, step: 0.5, required: false },
     weightKg: { label: "", placeholder: "70", min: 30, max: 250, step: 0.5, required: false },
@@ -4606,7 +4638,7 @@
     hipsCm: { label: "", placeholder: "95", min: 50, max: 200, step: 0.5, required: false },
     footCm: { label: "", placeholder: "26", min: 15, max: 40, step: 0.5, required: false }
   };
-  function createMeasuresForm(strings, callbacks, photoData, prefillMeasures, primaryColor = "#1a1a1a", mostraPiede = false) {
+  function createMeasuresForm(strings, callbacks, photoData, prefillMeasures, primaryColor = "#1a1a1a", mostraPiede = false, sesso = null) {
     const container = document.createElement("div");
     container.setAttribute("data-cabina-measures-form", "");
     const title = document.createElement("h2");
@@ -4678,6 +4710,8 @@
     let referenceHeightCm = REFERENCE_HEIGHT_CM;
     const manualFields = /* @__PURE__ */ new Set();
     const autoFilledFields = /* @__PURE__ */ new Set();
+    let stimeDalPeso = false;
+    let sessoFormula = sesso;
     let heightHintEl = null;
     const fieldNames = ["heightCm", "weightKg", "bustCm", "waistCm", "hipsCm"];
     const invisibleLabels = [
@@ -4760,6 +4794,8 @@
           recalibrateFromHeight();
           updateAutoLabel("heightCm");
           updateHeightHint();
+        } else if (fieldName === "weightKg") {
+          recalibrateFromHeight();
         } else if (input.value.trim() === "") {
           manualFields.delete(fieldName);
           recalibrateFromHeight();
@@ -4794,6 +4830,49 @@
       }
       container.appendChild(wrapper);
     }
+    let fit = "regular";
+    const fitWrap = document.createElement("div");
+    fitWrap.setAttribute("data-cabina-fit", "");
+    fitWrap.style.cssText = "margin:4px 0 12px;";
+    const fitLabel = document.createElement("div");
+    fitLabel.textContent = strings.fit ?? "Fit";
+    fitLabel.style.cssText = "font-size:14px;font-weight:500;color:#374151;margin-bottom:4px;";
+    fitWrap.appendChild(fitLabel);
+    const fitRow = document.createElement("div");
+    fitRow.setAttribute("role", "group");
+    fitRow.setAttribute("aria-label", strings.fit ?? "Fit");
+    fitRow.style.cssText = "display:flex;gap:6px;";
+    const fitButtons = [];
+    const fitOptions = [
+      ["fitted", strings.fitFitted ?? "Fitted"],
+      ["regular", strings.fitRegular ?? "Regular"],
+      ["relaxed", strings.fitRelaxed ?? "Relaxed"]
+    ];
+    const paintFit = () => {
+      for (const [value, b] of fitButtons) {
+        const on = value === fit;
+        b.setAttribute("aria-pressed", on ? "true" : "false");
+        b.style.background = on ? primaryColor : "#fff";
+        b.style.color = on ? "#fff" : "#1a1a1a";
+        b.style.borderColor = on ? primaryColor : "#d1d5db";
+      }
+    };
+    for (const [value, text] of fitOptions) {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.textContent = text;
+      b.setAttribute("data-cabina-fit-option", value);
+      b.style.cssText = "flex:1;padding:8px 4px;border:1px solid #d1d5db;border-radius:4px;font-size:13px;font-family:inherit;cursor:pointer;";
+      b.addEventListener("click", () => {
+        fit = value;
+        paintFit();
+      });
+      fitButtons.push([value, b]);
+      fitRow.appendChild(b);
+    }
+    paintFit();
+    fitWrap.appendChild(fitRow);
+    container.appendChild(fitWrap);
     const buttonRow = document.createElement("div");
     buttonRow.style.cssText = "display:flex;gap:8px;margin-top:8px;";
     const cancelBtn = document.createElement("button");
@@ -4856,10 +4935,34 @@
       label.style.display = isAuto ? "inline" : "none";
     }
     function recalibrateFromHeight() {
+      const numero = (field, min, max) => {
+        const raw = field.value.trim();
+        const n = raw === "" ? NaN : parseFloat(normalizeDecimal(raw));
+        return !isNaN(n) && n >= min && n <= max ? n : null;
+      };
+      const target = numero(fields.heightCm, 100, 220);
+      const peso = numero(fields.weightKg, 30, 250);
+      const daPeso = target != null && peso != null ? misureDaAltezzaPeso(target, peso, sessoFormula) : null;
+      if (daPeso) {
+        for (const name of ["bustCm", "waistCm", "hipsCm"]) {
+          if (manualFields.has(name)) continue;
+          fields[name].value = String(daPeso[name]);
+          autoFilledFields.add(name);
+          updateAutoLabel(name);
+        }
+        stimeDalPeso = true;
+        return;
+      }
+      if (stimeDalPeso && !autoBaseMeasures) {
+        for (const name of ["bustCm", "waistCm", "hipsCm"]) {
+          if (manualFields.has(name)) continue;
+          fields[name].value = "";
+          autoFilledFields.delete(name);
+          updateAutoLabel(name);
+        }
+      }
+      stimeDalPeso = false;
       if (!autoBaseMeasures) return;
-      const raw = fields.heightCm.value.trim();
-      const parsed = raw === "" ? NaN : parseFloat(normalizeDecimal(raw));
-      const target = !isNaN(parsed) && parsed >= 100 && parsed <= 220 ? parsed : null;
       const calibrated = calibrateCircumferences(autoBaseMeasures, referenceHeightCm, target);
       for (const name of ["bustCm", "waistCm", "hipsCm"]) {
         if (manualFields.has(name)) continue;
@@ -4945,7 +5048,7 @@
       submitting = true;
       updateConfirmButton();
       try {
-        await callbacks.onConfirm(values, measureSource);
+        await callbacks.onConfirm(values, measureSource, fit);
       } finally {
         submitting = false;
         if (container.isConnected) updateConfirmButton();
@@ -4966,6 +5069,7 @@
             const aiMeasures = await callbacks.onRequestAiEstimate(dataUrl);
             if (!detectionMsg.isConnected) return;
             if (aiMeasures && Object.keys(aiMeasures).length > 0) {
+              if (!sesso && aiMeasures.sex) sessoFormula = aiMeasures.sex;
               fillFromMeasures(aiMeasures, "vision");
               detectionMsg.textContent = strings.aiDetected;
               detectionMsg.style.color = "#16a34a";
@@ -5066,14 +5170,16 @@
     if (identityMode === "preset_model") return true;
     return isPhotoConsentValid(stored);
   }
-  function preset(gender, bodyType, labelKey) {
-    const id = `${gender}-${bodyType}`;
+  const AGE_BANDS = ["18-25", "26-35", "36-45", "46-55"];
+  function preset(gender, bodyType, labelKey, ageBand) {
+    const id = ageBand ? `${gender}-${ageBand}-${bodyType}` : `${gender}-${bodyType}`;
     return {
       id,
       gender,
+      ...ageBand && { ageBand },
       bodyType,
       labelKey,
-      assetPath: `/models/model-${id}.jpg`,
+      assetPath: `/models/model-${id}.webp`,
       thumbPath: `/models/model-${id}-thumb.jpg`
     };
   }
@@ -5087,6 +5193,18 @@
     preset("male", "curvy", "model_gallery.body_curvy_male"),
     preset("male", "plus", "model_gallery.body_plus")
   ];
+  const MORE_MODELS = PRESET_MODELS.flatMap(
+    (base) => AGE_BANDS.map((band) => preset(base.gender, base.bodyType, base.labelKey, band))
+  ).sort(
+    (a, b) => (
+      // Ordine di rendering: genere, poi fascia, poi corporatura come nelle 8.
+      a.gender.localeCompare(b.gender) || a.ageBand.localeCompare(b.ageBand)
+    )
+  );
+  const ALL_MODELS = [...PRESET_MODELS, ...MORE_MODELS];
+  function ageBandLabel(band) {
+    return band.replace("-", "–");
+  }
   const GENDER_LABEL_KEYS = {
     female: "model_gallery.gender_female",
     male: "model_gallery.gender_male"
@@ -5096,12 +5214,43 @@
     return getLocaleString(model.labelKey);
   }
   function modelAriaLabel(model) {
-    return `${getLocaleString(GENDER_LABEL_KEYS[model.gender])} ${modelLabel(model)}`;
+    const band = model.ageBand ? ` ${ageBandLabel(model.ageBand)}` : "";
+    return `${getLocaleString(GENDER_LABEL_KEYS[model.gender])}${band} ${modelLabel(model)}`;
   }
-  function createModelGallery(strings, callbacks) {
-    const fragment = document.createDocumentFragment();
-    const container = document.createElement("div");
-    container.setAttribute("data-cabina-model-gallery", "");
+  function createModelCard(model, onSelect) {
+    const card = document.createElement("button");
+    card.type = "button";
+    card.setAttribute("data-cabina-model-card", model.id);
+    card.setAttribute("aria-label", modelAriaLabel(model));
+    card.style.cssText = [
+      "display:flex",
+      "flex-direction:column",
+      "align-items:center",
+      "gap:4px",
+      "padding:6px",
+      "border:1px solid #d1d5db",
+      "border-radius:8px",
+      "background:#fff",
+      "cursor:pointer",
+      "width:64px"
+    ].join(";");
+    const thumb = document.createElement("img");
+    thumb.setAttribute("data-cabina-model-thumb", model.id);
+    thumb.loading = "lazy";
+    thumb.alt = "";
+    thumb.style.cssText = ["width:44px", "height:88px", "object-fit:contain", "display:block"].join(";");
+    thumb.addEventListener("error", () => {
+      thumb.style.display = "none";
+    });
+    card.appendChild(thumb);
+    const label = document.createElement("span");
+    label.textContent = modelLabel(model);
+    label.style.cssText = "font-size:11px;color:#374151;text-align:center;";
+    card.appendChild(label);
+    card.addEventListener("click", () => onSelect(model));
+    return card;
+  }
+  function appendHeading(container, strings) {
     const title = document.createElement("h3");
     title.textContent = strings.title;
     title.style.cssText = "margin:0 0 4px;font-size:15px;font-weight:600;color:#1a1a1a;";
@@ -5110,60 +5259,84 @@
     subtitle.textContent = strings.subtitle;
     subtitle.style.cssText = "margin:0 0 12px;font-size:12px;color:#6b7280;";
     container.appendChild(subtitle);
-    for (const gender of MODEL_GENDERS) {
-      const models = PRESET_MODELS.filter((m) => m.gender === gender);
-      if (models.length === 0) continue;
-      const groupTitle = document.createElement("h4");
-      groupTitle.setAttribute("data-cabina-model-group", gender);
-      groupTitle.textContent = getLocaleString(GENDER_LABEL_KEYS[gender]);
-      groupTitle.style.cssText = "margin:8px 0 6px;font-size:12px;font-weight:600;color:#6b7280;text-align:center;";
-      container.appendChild(groupTitle);
-      const grid = document.createElement("div");
-      grid.setAttribute("data-cabina-model-grid", gender);
-      grid.style.cssText = [
-        "display:flex",
-        "flex-wrap:wrap",
-        "gap:8px",
-        "justify-content:center"
-      ].join(";");
-      for (const model of models) {
-        const card = document.createElement("button");
-        card.type = "button";
-        card.setAttribute("data-cabina-model-card", model.id);
-        card.setAttribute("aria-label", modelAriaLabel(model));
-        card.style.cssText = [
-          "display:flex",
-          "flex-direction:column",
-          "align-items:center",
-          "gap:4px",
-          "padding:6px",
-          "border:1px solid #d1d5db",
-          "border-radius:8px",
-          "background:#fff",
-          "cursor:pointer",
-          "width:64px"
-        ].join(";");
-        const thumb = document.createElement("img");
-        thumb.setAttribute("data-cabina-model-thumb", model.id);
-        thumb.alt = "";
-        thumb.style.cssText = ["width:44px", "height:88px", "object-fit:contain", "display:block"].join(";");
-        thumb.addEventListener("error", () => {
-          thumb.style.display = "none";
-        });
-        card.appendChild(thumb);
-        const label = document.createElement("span");
-        label.textContent = modelLabel(model);
-        label.style.cssText = "font-size:11px;color:#374151;text-align:center;";
-        card.appendChild(label);
-        card.addEventListener("click", () => callbacks.onModelSelected(model));
-        grid.appendChild(card);
-      }
-      container.appendChild(grid);
-    }
+  }
+  function appendGroup(container, heading, group, models, onSelect) {
+    const groupTitle = document.createElement("h4");
+    groupTitle.setAttribute("data-cabina-model-group", group);
+    groupTitle.textContent = heading;
+    groupTitle.style.cssText = "margin:8px 0 6px;font-size:12px;font-weight:600;color:#6b7280;text-align:center;";
+    container.appendChild(groupTitle);
+    const grid = document.createElement("div");
+    grid.setAttribute("data-cabina-model-grid", group);
+    grid.style.cssText = [
+      "display:flex",
+      "flex-wrap:wrap",
+      "gap:8px",
+      "justify-content:center"
+    ].join(";");
+    for (const model of models) grid.appendChild(createModelCard(model, onSelect));
+    container.appendChild(grid);
+  }
+  function appendErrorArea(container) {
     const errorArea = document.createElement("p");
     errorArea.setAttribute("data-cabina-model-error", "");
     errorArea.style.cssText = ["color:#dc2626", "font-size:12px", "margin:8px 0 0", "display:none"].join(";");
     container.appendChild(errorArea);
+  }
+  function createShowMoreButton(onShowMore) {
+    const more = document.createElement("button");
+    more.type = "button";
+    more.setAttribute("data-cabina-model-more", "");
+    more.textContent = getLocaleString("model_gallery.more_button");
+    more.style.cssText = [
+      "display:block",
+      "margin:12px auto 4px",
+      "padding:8px 14px",
+      "border:1px solid #d1d5db",
+      "border-radius:999px",
+      "background:#fff",
+      "color:#1a1a1a",
+      "font-size:12px",
+      "font-family:inherit",
+      "cursor:pointer"
+    ].join(";");
+    more.addEventListener("click", onShowMore);
+    return more;
+  }
+  function createModelGallery(strings, callbacks) {
+    const fragment = document.createDocumentFragment();
+    const container = document.createElement("div");
+    container.setAttribute("data-cabina-model-gallery", "");
+    appendHeading(container, strings);
+    MODEL_GENDERS.forEach((gender, i) => {
+      const models = PRESET_MODELS.filter((m) => m.gender === gender);
+      if (models.length === 0) return;
+      if (i > 0 && callbacks.onShowMore) container.appendChild(createShowMoreButton(callbacks.onShowMore));
+      appendGroup(container, getLocaleString(GENDER_LABEL_KEYS[gender]), gender, models, callbacks.onModelSelected);
+    });
+    appendErrorArea(container);
+    fragment.appendChild(container);
+    return fragment;
+  }
+  function createMoreModelsScreen(strings, onModelSelected) {
+    const fragment = document.createDocumentFragment();
+    const container = document.createElement("div");
+    container.setAttribute("data-cabina-model-more-screen", "");
+    appendHeading(container, strings);
+    for (const gender of MODEL_GENDERS) {
+      for (const band of AGE_BANDS) {
+        const models = MORE_MODELS.filter((m) => m.gender === gender && m.ageBand === band);
+        if (models.length === 0) continue;
+        appendGroup(
+          container,
+          `${getLocaleString(GENDER_LABEL_KEYS[gender])} · ${ageBandLabel(band)}`,
+          `${gender}-${band}`,
+          models,
+          onModelSelected
+        );
+      }
+    }
+    appendErrorArea(container);
     fragment.appendChild(container);
     return fragment;
   }
@@ -5178,7 +5351,7 @@
     const thumbs = container.querySelectorAll("[data-cabina-model-thumb]");
     thumbs.forEach((img) => {
       const id = img.getAttribute("data-cabina-model-thumb");
-      const model = PRESET_MODELS.find((m) => m.id === id);
+      const model = ALL_MODELS.find((m) => m.id === id);
       if (model) img.src = `${sanitizedBase}${model.thumbPath}`;
     });
   }
@@ -6256,11 +6429,216 @@
     });
     return bottone;
   }
+  const REGOLE = [
+    ["footwear", /\b(shoes?|sneakers?|trainers?|boots?|loafers?|flats|heels?|pumps?|sandals?|mules?|espadrilles?|slippers?|moccasins?|brogues?|scarp[ae]|stival[ei]|stivalett[io]|sandal[oi]|mocassin[oi]|d[ée]collet[ée]|ballerin[ae]|chaussures?|baskets?|bottes?|bottines?|sandales?|escarpins?|zapat(o|os|illa|illas)|botas?|sandalias?|schuhe?|stiefel|sandalen?|turnschuhe?)\b/i],
+    ["outerwear", /\b(jackets?|coats?|parkas?|blazers?|trench|puffers?|gilets?|anoraks?|bombers?|outerwear|giacc[ah][ei]?|giubbott[oi]|cappott[oi]|piumin[oi]|capispalla|vestes?|manteaux?|manteau|blousons?|chaquetas?|abrigos?|jacken?|m[äa]ntel)\b/i],
+    ["bottom", /\b(jeans|trousers|pants|chinos?|shorts|skirts?|leggings|joggers|bottoms|pantalon[ie]?|pantalones|gonn[ae]|bermudas?|jupes?|faldas?|vaqueros|hosen?|r[öo]cke?)\b/i],
+    ["top", /\b(shirts?|t-shirts?|tees?|tops?|blouses?|sweaters?|jumpers?|knit|knitwear|cardigans?|hoodies?|sweatshirts?|polos?|henleys?|crewnecks?|roll-neck|turtlenecks?|tanks?|camici[ae]|magli[ae]|maglion[ei]|felp[ae]|chemises?|pulls?|pullovers?|camisas?|camisetas?|sudaderas?|hemd(en)?|blusen?)\b/i],
+    ["dress", /\b(dress(es)?|jumpsuits?|abit[oi]|vestit[oi]|robes?|vestidos?|kleid(er)?)\b/i]
+  ];
+  const DONNA = /\b(women|woman|womens|female|ladies|donna|donne|femme|femmes|mujer|mujeres|damen|frauen)\b/i;
+  const UOMO = /\b(men|man|mens|male|uomo|uomini|homme|hommes|hombre|hombres|herren|m[äa]nner)\b/i;
+  function classifica(testi) {
+    const t = testi.filter(Boolean).join(" · ");
+    const categoria = REGOLE.find(([, re]) => re.test(t))?.[0] ?? null;
+    const d = DONNA.test(t);
+    const u = UOMO.test(t);
+    return { categoria, genere: d === u ? null : d ? "women" : "men" };
+  }
+  function daProdotto(p) {
+    const img = p.images?.[0]?.src;
+    if (!img) return null;
+    const tags = Array.isArray(p.tags) ? p.tags : (p.tags ?? "").split(",");
+    return { id: p.handle, label: p.title, imageUrl: img, ...classifica([p.title, p.product_type ?? "", ...tags]) };
+  }
+  async function leggiProdottiNegozio() {
+    if (typeof window === "undefined" || !window.Shopify) return [];
+    try {
+      const res = await fetch("/products.json?limit=250", { credentials: "same-origin" });
+      if (!res.ok) return [];
+      const body = await res.json();
+      return body.products ?? [];
+    } catch {
+      return [];
+    }
+  }
+  function handleDellaPagina(pathname) {
+    return pathname.match(/\/products\/([^/?#]+)/)?.[1] ?? null;
+  }
+  const DA_FASHN = {
+    tops: "top",
+    bottoms: "bottom",
+    "one-pieces": "dress",
+    auto: null
+  };
+  function daCatalogo(catalog) {
+    return (catalog?.garments ?? []).map((g) => ({
+      id: g.id,
+      label: g.label,
+      imageUrl: g.imageUrl,
+      categoria: DA_FASHN[g.fashnCategory] ?? null,
+      genere: null
+    }));
+  }
+  const COMPLEMENTARI = {
+    top: ["bottom", "footwear", "outerwear"],
+    outerwear: ["top", "bottom", "footwear"],
+    bottom: ["top", "footwear", "outerwear"],
+    dress: ["footwear", "outerwear"],
+    footwear: ["top", "bottom", "outerwear", "dress"]
+  };
+  function daAnalisi(c) {
+    return c === "top" || c === "outerwear" || c === "bottom" || c === "dress" || c === "footwear" ? c : null;
+  }
+  const PER_CATEGORIA = 6;
+  function proposteOutfit(opzioni) {
+    const { catalog, prodotti, handlePagina } = opzioni;
+    const pagina = prodotti.find((p) => p.handle === handlePagina);
+    const classePagina = pagina ? daProdotto(pagina) : null;
+    const categoriaPagina = daAnalisi(opzioni.categoriaPagina) ?? classePagina?.categoria ?? null;
+    const generePagina = classePagina?.genere ?? null;
+    const dalMerchant = catalog != null && catalog.garments.length > 0;
+    const fonte = dalMerchant ? daCatalogo(catalog) : prodotti.filter((p) => p.handle !== handlePagina).map(daProdotto).filter((c) => c != null);
+    const ammesse = categoriaPagina ? COMPLEMENTARI[categoriaPagina] : null;
+    const utili = fonte.filter(
+      (c) => (
+        // Un capo senza categoria passa solo se l'ha scelto il merchant (fonte B).
+        (!ammesse || (c.categoria == null ? dalMerchant : ammesse.includes(c.categoria))) && (!generePagina || !c.genere || c.genere === generePagina)
+      )
+    );
+    const ordine = ammesse ?? ["top", "bottom", "footwear", "outerwear", "dress"];
+    const scelte = [];
+    for (const cat of ordine) scelte.push(...utili.filter((c) => c.categoria === cat).slice(0, PER_CATEGORIA));
+    if (dalMerchant) scelte.push(...utili.filter((c) => c.categoria == null).slice(0, PER_CATEGORIA));
+    return scelte;
+  }
+  function comeCapoSelezionato(c) {
+    const category = c.categoria === "top" || c.categoria === "outerwear" ? "tops" : c.categoria === "bottom" ? "bottoms" : c.categoria === "dress" ? "one-pieces" : "auto";
+    return { imageUrl: c.imageUrl, category, removeExisting: removeExistingForCategory(category), garmentPhotoType: "auto" };
+  }
+  const MAX_CAPI_AGGIUNTI = MAX_MIX_AND_MATCH_GARMENTS - 1;
+  function tocca(selezione, capo) {
+    if (selezione.some((s) => s.id === capo.id)) return selezione.filter((s) => s.id !== capo.id);
+    const senzaStessaCategoria = capo.categoria ? selezione.filter((s) => s.categoria !== capo.categoria) : [...selezione];
+    if (senzaStessaCategoria.length >= MAX_CAPI_AGGIUNTI) return [...selezione];
+    return [...senzaStessaCategoria, capo];
+  }
+  function createOutfitPanel(capi, strings, onProva) {
+    const container = document.createElement("div");
+    container.setAttribute("data-cabina-outfit", "");
+    container.style.cssText = [
+      "display:flex",
+      "flex-direction:column",
+      "gap:4px",
+      "padding:8px 12px",
+      "align-self:center",
+      "box-sizing:border-box",
+      "max-width:min(460px, 92vw)",
+      "background:rgba(0,0,0,0.45)",
+      "border-radius:10px",
+      "backdrop-filter:blur(10px)",
+      "-webkit-backdrop-filter:blur(10px)"
+    ].join(";");
+    const label = document.createElement("button");
+    label.type = "button";
+    label.setAttribute("data-cabina-outfit-toggle", "");
+    label.textContent = strings.label;
+    label.style.cssText = "align-self:flex-start;padding:0;border:none;background:none;font-family:inherit;cursor:pointer;font-size:11px;color:rgba(255,255,255,0.7);text-transform:uppercase;letter-spacing:0.05em;";
+    container.appendChild(label);
+    const row = document.createElement("div");
+    row.setAttribute("data-cabina-outfit-row", "");
+    row.style.cssText = "display:flex;gap:6px;overflow-x:auto;padding:4px 0;-webkit-overflow-scrolling:touch;scrollbar-width:none;";
+    container.appendChild(row);
+    const azioni = document.createElement("div");
+    azioni.style.cssText = "display:flex;align-items:center;gap:8px;";
+    const prova = document.createElement("button");
+    prova.type = "button";
+    prova.setAttribute("data-cabina-outfit-try", "");
+    prova.style.cssText = "padding:8px 14px;border:none;border-radius:999px;background:#fff;color:#1a1a1a;font-size:13px;font-weight:600;font-family:inherit;cursor:pointer;";
+    const esito = document.createElement("span");
+    esito.setAttribute("data-cabina-outfit-status", "");
+    esito.setAttribute("role", "status");
+    esito.style.cssText = "font-size:12px;color:rgba(255,255,255,0.85);";
+    azioni.appendChild(prova);
+    azioni.appendChild(esito);
+    container.appendChild(azioni);
+    let selezione = [];
+    let inCorso = false;
+    const apri = (aperto) => {
+      row.style.display = aperto ? "flex" : "none";
+      azioni.style.display = aperto ? "flex" : "none";
+      label.setAttribute("aria-expanded", aperto ? "true" : "false");
+    };
+    label.addEventListener("click", () => apri(row.style.display === "none"));
+    const carte = [];
+    const aggiorna = () => {
+      for (const [capo, carta] of carte) {
+        const scelto = selezione.some((s) => s.id === capo.id);
+        carta.setAttribute("aria-pressed", scelto ? "true" : "false");
+        carta.style.borderColor = scelto ? "#fff" : "rgba(255,255,255,0.2)";
+        carta.style.background = scelto ? "rgba(255,255,255,0.3)" : "rgba(255,255,255,0.1)";
+      }
+      prova.textContent = inCorso ? strings.loading : `${strings.tryTogether} (${selezione.length}/${MAX_CAPI_AGGIUNTI})`;
+      prova.disabled = inCorso || selezione.length === 0;
+      prova.style.opacity = prova.disabled ? "0.5" : "1";
+    };
+    for (const capo of capi) {
+      const carta = document.createElement("button");
+      carta.type = "button";
+      carta.setAttribute("data-cabina-outfit-card", capo.id);
+      carta.setAttribute("aria-label", capo.label);
+      carta.style.cssText = "display:flex;flex-direction:column;align-items:center;gap:2px;padding:4px;border:1px solid rgba(255,255,255,0.2);border-radius:6px;background:rgba(255,255,255,0.1);cursor:pointer;flex-shrink:0;width:56px;";
+      const img = document.createElement("img");
+      img.alt = "";
+      img.loading = "lazy";
+      img.src = capo.imageUrl;
+      img.style.cssText = "width:40px;height:40px;object-fit:contain;display:block;";
+      img.addEventListener("error", () => {
+        img.style.display = "none";
+      });
+      carta.appendChild(img);
+      const nome = document.createElement("span");
+      nome.textContent = capo.label;
+      nome.style.cssText = "font-size:9px;color:rgba(255,255,255,0.85);text-align:center;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:50px;";
+      carta.appendChild(nome);
+      carta.addEventListener("click", () => {
+        if (inCorso) return;
+        selezione = tocca(selezione, capo);
+        esito.textContent = "";
+        aggiorna();
+      });
+      carte.push([capo, carta]);
+      row.appendChild(carta);
+    }
+    prova.addEventListener("click", async () => {
+      if (inCorso || selezione.length === 0) return;
+      inCorso = true;
+      esito.textContent = "";
+      aggiorna();
+      let ok = false;
+      try {
+        ok = await onProva(selezione);
+      } catch {
+        ok = false;
+      }
+      inCorso = false;
+      esito.textContent = ok ? "" : strings.error;
+      aggiorna();
+      if (ok) apri(false);
+    });
+    aggiorna();
+    apri(true);
+    return container;
+  }
   let overlayElement = null;
   let rotationHandler = null;
   let zoomHandler = null;
   let imageElements = [];
   let sizeBadgeElement = null;
+  let showSizeScore = false;
+  function setShowSizeScore(value) {
+    showSizeScore = value;
+  }
   const STAGE_ATTR = "data-cabina-stage";
   const SIZE_HOST_ATTR = "data-cabina-size";
   const AUTO_ATTR = "data-cabina-auto";
@@ -6372,17 +6750,29 @@
     sizeText.style.cssText = "font-size:26px;font-weight:700;";
     sizeText.textContent = recommendation.size;
     sizeLine.appendChild(sizeText);
-    sizeLine.appendChild(buildScoreSpan(recommendation.score));
+    if (showSizeScore) sizeLine.appendChild(buildScoreSpan(recommendation.score));
     badge.appendChild(label);
     badge.appendChild(sizeLine);
     const sub = document.createElement("span");
     sub.style.cssText = "display:block;font-size:14px;color:rgba(255,255,255,0.85);margin-top:5px;";
-    sub.textContent = recommendation.confidence === "between" && recommendation.alternative ? getLocaleString("size.between", {
-      size1: recommendation.alternative,
+    const alt = recommendation.alternative;
+    sub.textContent = recommendation.confidence === "between" && alt ? recommendation.alternativeLarger ? getLocaleStringOr("size.between_smaller", "size.between", {
+      size1: recommendation.size,
+      size2: alt,
+      recommended: recommendation.size
+    }) : getLocaleString("size.between", {
+      size1: alt,
       size2: recommendation.size,
       recommended: recommendation.size
     }) : getLocaleString("size.recommended");
     badge.appendChild(sub);
+    if (recommendation.comfortSize) {
+      const comfort = document.createElement("span");
+      comfort.setAttribute("data-cabina-comfort-size", "");
+      comfort.style.cssText = "display:block;font-size:13px;color:rgba(255,255,255,0.85);margin-top:4px;";
+      comfort.textContent = getLocaleString("size.comfort_hint", { size: recommendation.comfortSize });
+      badge.appendChild(comfort);
+    }
     return badge;
   }
   function mountSizeBadge(overlay, recommendation, imageContainerRef) {
@@ -6398,7 +6788,7 @@
     sizeBadgeElement?.remove();
     sizeBadgeElement = null;
   }
-  function showTryOnOverlay(renderResults, onClose, onAngleChange, sizeRecommendation, photoData, catalog, resultId, apiContext, onBack) {
+  function showTryOnOverlay(renderResults, onClose, onAngleChange, sizeRecommendation, photoData, catalog, resultId, apiContext, onBack, outfit) {
     removeTryOnOverlay();
     const stage = findStage();
     const inline = stage != null;
@@ -6466,7 +6856,7 @@
     const hasFront = renderResults[0] != null && photoData != null;
     const isFrontAngle = initialIndex === 0;
     let bottomBar = null;
-    if (hasFront && catalog && catalog.garments.length > 0 && apiContext) {
+    if (hasFront && apiContext) {
       bottomBar = document.createElement("div");
       bottomBar.setAttribute("data-cabina-tryon-bottom-bar", "");
       bottomBar.style.cssText = [
@@ -6482,27 +6872,66 @@
         `pointer-events:${isFrontAngle ? "auto" : "none"}`,
         "transition:opacity 0.3s ease-in-out"
       ].join(";");
-      const selectStyleUI = createSelectStyle(
-        catalog,
-        { label: getLocaleString("reveal_result.select_style_label") },
-        {
-          onGarmentSelected: async (garment) => {
-            const swapResult = await tryonGenerative(
-              apiContext.apiKey,
-              apiContext.baseUrl,
-              photoData,
-              [garment],
-              window.location.href,
-              apiContext.identity
-            );
-            if (!swapResult.ok) return;
-            revealSlider?.updateGenerated(swapResult.url);
-            resultActions?.updateResult(swapResult.url, swapResult.resultId);
-          },
-          getPhotoData: () => photoData ?? null
-        }
-      );
-      bottomBar.appendChild(selectStyleUI);
+      const mostraRisultato = (r) => {
+        revealSlider?.updateGenerated(r.url);
+        resultActions?.updateResult(r.url, r.resultId);
+      };
+      if (outfit) {
+        const posto = document.createElement("div");
+        bottomBar.appendChild(posto);
+        void leggiProdottiNegozio().then((prodotti) => {
+          const capi = proposteOutfit({
+            catalog: catalog ?? null,
+            prodotti,
+            categoriaPagina: outfit.categoriaPagina,
+            handlePagina: handleDellaPagina(window.location.pathname)
+          });
+          if (capi.length === 0 || !posto.isConnected) return;
+          posto.replaceWith(createOutfitPanel(
+            capi,
+            {
+              label: getLocaleString("reveal_result.outfit_label"),
+              tryTogether: getLocaleString("reveal_result.outfit_try"),
+              loading: getLocaleString("reveal_result.outfit_loading"),
+              error: getLocaleString("reveal_result.outfit_error")
+            },
+            async (selezione) => {
+              const esito = await tryonGenerative(
+                apiContext.apiKey,
+                apiContext.baseUrl,
+                photoData,
+                [outfit.capoPagina, ...selezione.map(comeCapoSelezionato)],
+                window.location.href,
+                apiContext.identity
+              );
+              if (!esito.ok) return false;
+              mostraRisultato(esito);
+              return true;
+            }
+          ));
+        });
+      } else if (catalog && catalog.garments.length > 0) {
+        const selectStyleUI = createSelectStyle(
+          catalog,
+          { label: getLocaleString("reveal_result.select_style_label") },
+          {
+            onGarmentSelected: async (garment) => {
+              const swapResult = await tryonGenerative(
+                apiContext.apiKey,
+                apiContext.baseUrl,
+                photoData,
+                [garment],
+                window.location.href,
+                apiContext.identity
+              );
+              if (!swapResult.ok) return;
+              mostraRisultato(swapResult);
+            },
+            getPhotoData: () => photoData ?? null
+          }
+        );
+        bottomBar.appendChild(selectStyleUI);
+      }
       const addToCart = createAddToCartButton(getLocaleString("reveal_result.add_to_cart"), {
         // La stessa uscita del pulsante ✕: dopo l'aggiunta l'acquirente deve
         // vedere il carrello del negozio — spesso un drawer che si apre da solo —
@@ -6757,6 +7186,26 @@
   const SCORE_FLOOR = 80;
   const SCORE_SPAN = 18;
   const CATEGORY_WEIGHT_EXTRA = 0.5;
+  const LOOSE_WEIGHT = 0.5;
+  const FIT_MARGIN_CM = 2;
+  function dimensioniChiave(category) {
+    switch (category) {
+      case "top":
+      case "outerwear":
+      case "dress":
+        return ["bust", "waist"];
+      case "bottom":
+        return ["waist", "hips"];
+      case "footwear":
+        return ["foot"];
+      default:
+        return ["bust", "waist", "hips"];
+    }
+  }
+  function rangeDi(measures, row, d) {
+    const [v, min, max] = d === "height" ? [measures.heightCm, row.heightMin, row.heightMax] : d === "bust" ? [measures.bustCm, row.bustMin, row.bustMax] : d === "waist" ? [measures.waistCm, row.waistMin, row.waistMax] : d === "hips" ? [measures.hipsCm, row.hipsMin, row.hipsMax] : [measures.footCm ?? 0, row.footMin ?? 0, row.footMax ?? 0];
+    return isRangeUnspecified(min, max) ? null : { v, min, max };
+  }
   function measureInRange(value, min, max) {
     if (isRangeUnspecified(min, max)) return true;
     return value >= min && value <= max;
@@ -6824,7 +7273,13 @@
     return dist;
   }
   function distanceFromRow(measures, row) {
-    return weightedDistanceFromRow(measures, row, { height: 1, bust: 1, waist: 1, hips: 1, foot: 1 });
+    let dist = 0;
+    for (const d of ["height", "bust", "waist", "hips", "foot"]) {
+      const r = rangeDi(measures, row, d);
+      if (!r) continue;
+      dist += Math.max(0, r.v - r.max) + LOOSE_WEIGHT * Math.max(0, r.min - r.v);
+    }
+    return dist;
   }
   function weightedRangeWidth(row, w) {
     let total = 0;
@@ -6850,7 +7305,60 @@
     const q = Math.max(0, Math.min(1, quality - penalty));
     return Math.round(SCORE_FLOOR + SCORE_SPAN * q);
   }
-  function computeRecommendedSize(measures, sizeTable, options) {
+  function conOrdine(rec, sizeTable) {
+    if (!rec.alternative) return rec;
+    const [a, b] = [rec.size, rec.alternative].map((s) => sizeTable.find((r) => r.size === s));
+    return a && b ? { ...rec, alternativeLarger: upperLimitsSum(b) > upperLimitsSum(a) } : rec;
+  }
+  function riga(sizeTable, size, passo) {
+    const ordinate = [...sizeTable].sort((a, b) => upperLimitsSum(a) - upperLimitsSum(b));
+    const i = ordinate.findIndex((r) => r.size === size);
+    return i < 0 ? void 0 : ordinate[i + passo];
+  }
+  function saltoAmmesso(da, a) {
+    const [x, y] = [da, a].map((s) => parseFloat(s.replace(",", ".")));
+    return Number.isNaN(x) || Number.isNaN(y) || y > x && y - x <= 1;
+  }
+  function applicaVestibilita(base, measures, sizeTable, options) {
+    const fit = options?.fit ?? "regular";
+    if (usaIlPiede(sizeTable)) {
+      const successiva = riga(sizeTable, base.size, 1);
+      const comfortSize = successiva && saltoAmmesso(base.size, successiva.size) ? successiva.size : void 0;
+      if (fit === "relaxed" && comfortSize) {
+        return { ...base, size: comfortSize, confidence: "between", alternative: base.size };
+      }
+      return comfortSize ? { ...base, comfortSize } : base;
+    }
+    if (fit === "regular") return base;
+    const chiave = dimensioniChiave(options?.garment?.category);
+    const rigaDi = (size) => sizeTable.find((r) => r.size === size);
+    if (base.confidence === "between" && base.alternative) {
+      const [a, b] = [rigaDi(base.size), rigaDi(base.alternative)];
+      if (!a || !b) return base;
+      const [minore2, maggiore] = upperLimitsSum(a) <= upperLimitsSum(b) ? [a, b] : [b, a];
+      if (fit === "relaxed") {
+        return { ...base, size: maggiore.size, alternative: minore2.size };
+      }
+      const entraNellaMinore = chiave.every((d) => {
+        const r = rangeDi(measures, minore2, d);
+        return !r || r.v <= r.max + FIT_MARGIN_CM;
+      });
+      return entraNellaMinore ? { ...base, size: minore2.size, alternative: maggiore.size } : base;
+    }
+    const attuale = rigaDi(base.size);
+    if (!attuale) return base;
+    const range = chiave.map((d) => rangeDi(measures, attuale, d)).filter((r) => r != null);
+    if (range.length === 0) return base;
+    if (fit === "relaxed") {
+      const maggiore = riga(sizeTable, base.size, 1);
+      const alLimite = range.some((r) => r.v >= r.max - FIT_MARGIN_CM);
+      return maggiore && alLimite ? { ...base, size: maggiore.size, confidence: "between", alternative: base.size } : base;
+    }
+    const minore = riga(sizeTable, base.size, -1);
+    const tuttoAlMinimo = range.every((r) => r.v <= r.min + FIT_MARGIN_CM);
+    return minore && tuttoAlMinimo ? { ...base, size: minore.size, confidence: "between", alternative: base.size } : base;
+  }
+  function consiglioBase(measures, sizeTable, options) {
     if (!sizeTable || sizeTable.length === 0) return null;
     if (options?.footEstimated && !usaIlPiede(sizeTable)) {
       options = { ...options, footEstimated: false };
@@ -6927,12 +7435,20 @@
     const candidate = pickSizeTables(tables, options?.garment?.category ?? null);
     let migliore = null;
     for (const table of candidate) {
-      const recommendation = computeRecommendedSize(measures, table.data, options);
+      const recommendation = consiglioBase(measures, table.data, options);
       if (!recommendation) continue;
       const vince = !migliore || recommendation.confidence === "exact" && migliore.recommendation.confidence !== "exact" || recommendation.confidence === migliore.recommendation.confidence && recommendation.score > migliore.recommendation.score;
       if (vince) migliore = { recommendation, table };
     }
-    return migliore ? { ...migliore, candidates: candidate.length } : null;
+    if (!migliore) return null;
+    return {
+      recommendation: conOrdine(
+        applicaVestibilita(migliore.recommendation, measures, migliore.table.data, options),
+        migliore.table.data
+      ),
+      table: migliore.table,
+      candidates: candidate.length
+    };
   }
   function senzaChiave(valore) {
     return valore.startsWith("form.") ? void 0 : valore;
@@ -6968,6 +7484,7 @@
   let lastCatalog = null;
   let currentLogoUrl = null;
   let currentPrimaryColor = "#1a1a1a";
+  let outfitAttivo = false;
   function sanitizeColor(value, fallback = "#1a1a1a") {
     return /^#[0-9a-fA-F]{6}$/.test(value) ? value : fallback;
   }
@@ -7271,35 +7788,50 @@
           orLabel.textContent = getLocaleString("model_gallery.or_label");
           orLabel.style.cssText = "text-align:center;color:#9ca3af;font-size:12px;margin:16px 0 8px;text-transform:uppercase;letter-spacing:0.05em;";
           content.appendChild(orLabel);
+          const onModelSelected = async (model) => {
+            if (modelSelectionInFlight) return;
+            modelSelectionInFlight = true;
+            const baseUrl = widgetContext.baseUrl ?? "";
+            const modalContent = overlay.querySelector("[data-cabina-modal-content]");
+            if (modalContent) setModelError(modalContent, "");
+            try {
+              const dataUrl = await downscalePhotoDataUrl(
+                await fetchModelAsDataUrl(baseUrl, model.assetPath)
+              );
+              if (widgetContext.state !== "photo") return;
+              widgetContext = widgetReducer(widgetContext, { type: "PRESET_MODEL_SELECTED", dataUrl });
+              renderState(button);
+            } catch (e) {
+              console.warn("[widget] Failed to load preset model", model.assetPath, e);
+              const errTarget = overlay.querySelector("[data-cabina-modal-content]");
+              if (errTarget) setModelError(errTarget, getLocaleString("model_gallery.load_error"));
+            } finally {
+              modelSelectionInFlight = false;
+            }
+          };
           const gallery = createModelGallery(
             {
               title: getLocaleString("model_gallery.title"),
               subtitle: getLocaleString("model_gallery.subtitle")
             },
             {
-              // La selezione converte l'asset in data URL (contratto photoData
-              // invariato verso tryonGenerative/callRenderApi) e dispatcha
-              // PRESET_MODEL_SELECTED → form misure (Proposta a 2026-07-31).
-              onModelSelected: async (model) => {
-                if (modelSelectionInFlight) return;
-                modelSelectionInFlight = true;
-                const baseUrl = widgetContext.baseUrl ?? "";
-                const modalContent = overlay.querySelector("[data-cabina-modal-content]");
-                if (modalContent) setModelError(modalContent, "");
-                try {
-                  const dataUrl = await downscalePhotoDataUrl(
-                    await fetchModelAsDataUrl(baseUrl, model.assetPath)
-                  );
-                  if (widgetContext.state !== "photo") return;
-                  widgetContext = widgetReducer(widgetContext, { type: "PRESET_MODEL_SELECTED", dataUrl });
-                  renderState(button);
-                } catch (e) {
-                  console.warn("[widget] Failed to load preset model", model.assetPath, e);
-                  const errTarget = overlay.querySelector("[data-cabina-modal-content]");
-                  if (errTarget) setModelError(errTarget, getLocaleString("model_gallery.load_error"));
-                } finally {
-                  modelSelectionInFlight = false;
-                }
+              onModelSelected,
+              // Seconda schermata DENTRO la cabina (2026-09-18): lo stato resta
+              // `photo`, cambia solo il contenuto del modale. «← Indietro» ridisegna
+              // lo step `photo` com'era — nessun evento nuovo nel reducer.
+              onShowMore: () => {
+                content.innerHTML = "";
+                restoreDragHandle(content);
+                renderBackButton(content, () => renderState(button));
+                content.appendChild(createMoreModelsScreen(
+                  {
+                    title: getLocaleString("model_gallery.more_title"),
+                    subtitle: getLocaleString("model_gallery.more_subtitle")
+                  },
+                  onModelSelected
+                ));
+                resolveModelThumbs(content, widgetContext.baseUrl ?? "");
+                content.scrollTop = 0;
               }
             }
           );
@@ -7357,10 +7889,15 @@
             // «Altezza» al posto di «Piede» sarebbe peggio del testo inglese
             // che il form usa quando il locale non ha ancora la chiave.
             foot: senzaChiave(getLocaleString("form.foot")),
-            invalidFoot: senzaChiave(getLocaleString("form.invalid_foot"))
+            invalidFoot: senzaChiave(getLocaleString("form.invalid_foot")),
+            // Vestibilità (18/09/2026): stessi fallback del piede.
+            fit: senzaChiave(getLocaleString("form.fit")),
+            fitFitted: senzaChiave(getLocaleString("form.fit_fitted")),
+            fitRegular: senzaChiave(getLocaleString("form.fit_regular")),
+            fitRelaxed: senzaChiave(getLocaleString("form.fit_relaxed"))
           },
           {
-            onConfirm: async (measures, measureSource) => {
+            onConfirm: async (measures, measureSource, fit) => {
               const url = extractProductImageUrl();
               let garments;
               if (url) {
@@ -7372,14 +7909,14 @@
                 garments = [{ imageUrl: url, category: params.category, removeExisting: params.removeExisting, garmentPhotoType: "auto" }];
               }
               if (widgetContext.state !== "form") return;
-              widgetContext = widgetReducer(widgetContext, { type: "MEASURES_CONFIRMED", measures, measureSource, garments });
+              widgetContext = widgetReducer(widgetContext, { type: "MEASURES_CONFIRMED", measures, measureSource, fit, garments });
               renderState(button);
             },
             onCancel: () => {
               widgetContext = widgetReducer(widgetContext, { type: "CLOSE" });
               renderState(button);
             },
-            // ⚠️ Alla stima misure la foto va a 1024px, non ai 1600 del try-on.
+            // ⚠️ Alla stima misure la foto va a 1024px, non ai 2048 del try-on.
             // A 1600 la vision impiega ~5,3s contro i ~7s di budget del primo
             // provider: ogni tanto sforava e rispondeva un SECONDO modello, con
             // misure sue — ed è da lì che veniva «la stima balla fra una prova e
@@ -7599,7 +8136,10 @@
             removeTryOnOverlay();
             widgetContext = widgetReducer(widgetContext, { type: "BACK" });
             renderState(button);
-          }
+          },
+          // «Completa il look»: solo se acceso, e partendo dal capo della prima
+          // prova — il capo della pagina resta sempre il primo.
+          outfitAttivo && widgetContext.selectedGarments?.[0] ? { capoPagina: widgetContext.selectedGarments[0], categoriaPagina: garmentAnalysis?.category ?? null } : void 0
         );
         if (apiKeyForCalc) {
           const hasMeasures = widgetContext.measures != null && (widgetContext.measures.heightCm != null || widgetContext.measures.bustCm != null || widgetContext.measures.waistCm != null || widgetContext.measures.hipsCm != null);
@@ -7615,7 +8155,8 @@
                 const scelta = recommendFromTables(measuresForCalc, tables, {
                   measureSource: widgetContext.measureSource ?? void 0,
                   garment: garmentAnalysis,
-                  footEstimated
+                  footEstimated,
+                  fit: widgetContext.fit ?? void 0
                 });
                 console.log(
                   `[widget] size-table=${scelta?.table.name ?? "-"} category=${garmentAnalysis?.category ?? "unknown"} candidate=${scelta?.candidates ?? 0}`
@@ -7735,6 +8276,8 @@
     if (!config) return;
     currentLogoUrl = sanitizeLogoUrl(config.logoUrl);
     currentPrimaryColor = sanitizeColor(config.primaryColor);
+    outfitAttivo = config.outfitEnabled === true;
+    setShowSizeScore(config.showSizeScore === true);
     if (config.widgetDisabled || config.creditsExhausted) {
       return;
     }

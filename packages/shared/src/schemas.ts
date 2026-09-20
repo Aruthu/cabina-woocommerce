@@ -1,6 +1,15 @@
 import { z } from 'zod';
 
-export const SUPPORTED_LANGUAGES = ['it', 'en', 'fr', 'es', 'de'] as const;
+/**
+ * Le lingue di Cabina: widget, dashboard, email e sito (18/09/2026). Le 5 di
+ * sempre più giapponese, portoghese brasiliano e indonesiano — prima nel widget,
+ * poi nella dashboard, poi nel sito: da qui in avanti sono una lista sola.
+ */
+export const SUPPORTED_LANGUAGES = ['it', 'en', 'fr', 'es', 'de', 'ja', 'pt-BR', 'id'] as const;
+
+/** Stessa lista: il nome resta per chi parla della lingua del widget. */
+export const WIDGET_LANGUAGES = SUPPORTED_LANGUAGES;
+export type WidgetLanguage = (typeof WIDGET_LANGUAGES)[number];
 
 export const MeasuresSchema = z.object({
   heightCm: z.number().min(100).max(220),
@@ -18,7 +27,7 @@ export const WidgetConfigSchema = z.object({
   primaryColor: z.string().regex(/^#[0-9A-Fa-f]{6}$/),
   buttonText: z.string().min(1).max(30),
   enabledCategories: z.array(z.string()),
-  defaultLanguage: z.enum(SUPPORTED_LANGUAGES).default('en'),
+  defaultLanguage: z.enum(WIDGET_LANGUAGES).default('en'),
 });
 
 // ─── Size Table Schemas (Story 4.1) ─────────────────────────────────────

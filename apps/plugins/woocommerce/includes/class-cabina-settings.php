@@ -43,7 +43,7 @@ class Cabina_Settings {
 			CABINA_APIKEY_OPTION,
 			[
 				'type'              => 'string',
-				'sanitize_callback' => 'sanitize_text_field',
+				'sanitize_callback' => [self::class, 'sanitize_api_key'],
 				'default'           => '',
 			]
 		);
@@ -65,13 +65,40 @@ class Cabina_Settings {
 	}
 
 	/**
+	 * Valida la chiave prima di salvarla.
+	 *
+	 * Il prefisso `cab_live_` e' la promessa fatta al merchant nella descrizione
+	 * del campo: senza controllo una chiave incollata male si salvava in
+	 * silenzio, il widget non partiva e la pagina non diceva perche'.
+	 * Una chiave rifiutata lascia in posto quella precedente.
+	 *
+	 * `strpos` e non `str_starts_with`: l'header dichiara PHP 7.4.
+	 *
+	 * @param mixed $value Valore inviato dal form.
+	 */
+	public static function sanitize_api_key($value): string {
+		$key = sanitize_text_field((string) $value);
+
+		if ('' !== $key && 0 !== strpos($key, 'cab_live_')) {
+			add_settings_error(
+				CABINA_APIKEY_OPTION,
+				'cabina_api_key_invalid',
+				esc_html__('The Cabina API key must start with "cab_live_". The key was not saved.', 'cabina')
+			);
+			return (string) get_option(CABINA_APIKEY_OPTION, '');
+		}
+
+		return $key;
+	}
+
+	/**
 	 * Renderizza la descrizione della sezione principale.
 	 */
 	public static function render_section_description(): void {
 		printf(
 			'<p>%s</p>',
 			esc_html__(
-				'Enter your Cabina API key to activate the try-on widget on your store\'s product pages. You can find the API key in the Cabina Dashboard → Settings → API Key.',
+				'Enter your Cabina API key to activate the try-on widget on your store\'s product pages. Generate the key in the Cabina Dashboard → Installation → Your API key.',
 				'cabina'
 			)
 		);
@@ -111,7 +138,7 @@ class Cabina_Settings {
 			<div class="card" style="max-width: 100%; padding: 10px 20px; margin: 20px 0 20px 0;">
 				<h2><?php echo esc_html__('How it works', 'cabina'); ?></h2>
 				<ol>
-					<li><?php echo esc_html__('Log in to your Cabina Dashboard and copy the API key from Settings → API Key.', 'cabina'); ?></li>
+					<li><?php echo esc_html__('Log in to your Cabina Dashboard, open Installation and generate your API key. It is shown only once: copy it right away.', 'cabina'); ?></li>
 					<li><?php echo esc_html__('Paste the API key below and click "Save changes".', 'cabina'); ?></li>
 					<li><?php echo esc_html__('Visit a product page of your store: the try-on button will appear automatically.', 'cabina'); ?></li>
 				</ol>

@@ -1,5 +1,5 @@
 import type { Measures, FashnGarmentCategory } from '@cabina/shared';
-import type { SizeRecommendation, MeasureSource } from '../features/size/size-recommendation';
+import type { SizeRecommendation, MeasureSource, FitPreference } from '../features/size/size-recommendation';
 
 export type GarmentCategory =
   | 'top'
@@ -35,6 +35,8 @@ export type WidgetContext = {
   recommendedSize: SizeRecommendation | null;
   /** Come sono state ottenute le misure (Story 9.3). Null/assente = non ancora confermate. */
   measureSource?: MeasureSource | null;
+  /** Vestibilità scelta nel form misure (18/09/2026). Assente = Normale. */
+  fit?: FitPreference | null;
   /** Story 12.2: discriminante ESPLICITO dell'origine di `photoData`.
    *  - 'user_photo'    → foto personale dell'acquirente (percorso PhotoCapture).
    *                      Attiva il gate GDPR foto 12.1 (fail-closed, CAP-1).
@@ -75,7 +77,7 @@ export type WidgetEvent =
   // `garments` presente → si va dritti in cabina saltando "Cosa provi" (il capo
   // della pagina è già noto). Assente → lo step resta, ed è l'unica strada quando
   // il tema del merchant non espone l'immagine del prodotto.
-  | { type: 'MEASURES_CONFIRMED'; measures: Partial<Measures>; measureSource?: MeasureSource; garments?: SelectedGarment[] }
+  | { type: 'MEASURES_CONFIRMED'; measures: Partial<Measures>; measureSource?: MeasureSource; fit?: FitPreference; garments?: SelectedGarment[] }
   | { type: 'RENDER_SUCCESS'; results: (string | null)[] }
   | { type: 'RENDER_ERROR'; error: string }
   | { type: 'ANGLE_CHANGED'; angle: number }

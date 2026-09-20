@@ -1,10 +1,12 @@
-export type SupportedLanguage = 'it' | 'en' | 'fr' | 'es' | 'de';
+import type { WidgetLanguage } from './schemas';
+
+export type SupportedLanguage = WidgetLanguage;
 
 export interface WidgetPublicConfig {
   primaryColor: string;
   buttonText: string;
   enabledCategories: string[];
-  defaultLanguage: SupportedLanguage;
+  defaultLanguage: WidgetLanguage;
   /** URL pubblico del logo del merchant (branding). Assente se non caricato. */
   logoUrl?: string | null;
   /** True se il widget è disattivato (limite sessioni piano raggiunto, Story 5.2).
@@ -17,6 +19,12 @@ export interface WidgetPublicConfig {
    *  via AI (a pagamento) — per leggere solo alla fine che le prove sono finite,
    *  e ricominciava da capo a ogni click. */
   creditsExhausted?: boolean;
+  /** «Completa il look» (18/09/2026): il merchant l'ha acceso dalla dashboard
+   *  (`widget_configs.outfit_enabled`, spento di default). Assente = spento. */
+  outfitEnabled?: boolean;
+  /** Percentuale accanto alla taglia consigliata (18/09/2026): spenta di default,
+   *  la accende il merchant dalla dashboard (`widget_configs.show_size_score`). */
+  showSizeScore?: boolean;
 }
 
 export interface Measures {
@@ -29,12 +37,23 @@ export interface Measures {
   footCm?: number;
 }
 
+/**
+ * Sesso letto dalla foto dall'AI Vision (18/09/2026). Serve SOLO a scegliere i
+ * coefficienti della formula altezza+peso (`stima-da-peso.ts` nel widget): non
+ * si mostra all'acquirente, non si salva, non viaggia oltre il form misure.
+ * Misurato sul modello di produzione: giusto 21 volte su 21 (7 foto × 3 giri).
+ */
+export type SessoStimato = 'female' | 'male';
+
+/** Ciò che restituisce la stima dalla foto: le misure e, se riconosciuto, il sesso. */
+export type StimaMisure = Partial<Measures> & { sex?: SessoStimato };
+
 export interface WidgetConfig {
   apiKey: string;
   primaryColor: string;
   buttonText: string;
   enabledCategories: string[];
-  defaultLanguage: SupportedLanguage;
+  defaultLanguage: WidgetLanguage;
 }
 
 export type MerchantPlan = 'freemium' | 'starter' | 'growth' | 'pro';
@@ -85,19 +104,31 @@ export const TRYON_RESULTS_BUCKET = 'merchant-tryon-results';
  * rinominarla costerebbe una migration per nulla), ma al merchant si parla di
  * prove — sono la stessa cosa, 1:1.
  *
- * ⚠️ Il conteggio resta **per capo**: una prova mix&match con 3 capi sono 3
- * generazioni in cascata, quindi 3 unità.
+ * ⚠️ Il conteggio resta **per capo**, con un'eccezione dal 18/09/2026: con 3
+ * capi insieme il terzo è gratis (`proveAddebitate`) — i capi partono in una
+ * sola generazione, non più in cascata.
  */
 export const TRYON_GENERATIVE_CREDIT_COST = 1;
 
 /**
- * Limite capi per composizione mix&match (Story 12.3): la cascata FASHN applica
- * un capo per volta in sequenza, quindi un numero alto allunga latenza e costo
- * linearmente. Unico posto di verità — riusato da dashboard (route + catalog
+ * Limite capi per composizione mix&match (Story 12.3). Dal 18/09/2026 i capi
+ * partono in UNA chiamata a Pruna (11,7 s per tre, misurato; la cascata di
+ * prima, un capo per volta, ne impiegava 36–40): la cascata resta solo come
+ * ripiego se il rendering ne applica meno. Unico posto di verità — riusato da dashboard (route + catalog
  * CRUD) e widget (garment-select), stesso pattern di `FashnGarmentCategorySchema`
  * (code review 12.3, patch P11: era duplicato manualmente in 3 file).
  */
 export const MAX_MIX_AND_MATCH_GARMENTS = 3;
+
+/**
+ * Prove addebitate al merchant per una composizione di `capi` capi (18/09/2026,
+ * decisione di Arou): con 3 capi insieme il terzo è gratis — pagano 2 prove.
+ * Con 1 o 2 capi, una prova per capo come sempre. Da quando i capi partono in
+ * una sola chiamata, tre capi costano a noi $0,031 invece di $0,045.
+ */
+export function proveAddebitate(capi: number): number {
+  return capi >= MAX_MIX_AND_MATCH_GARMENTS ? capi - 1 : capi;
+}
 
 /**
  * Prove extra (wallet, decisione Arou 2026-07-16): acquistabili quando il

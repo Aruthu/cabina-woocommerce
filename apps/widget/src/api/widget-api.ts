@@ -1,4 +1,4 @@
-import type { ApiResponse, Measures, SizeTableRow, SizeTableCategory, WidgetPublicConfig, FashnGarmentCategory } from '@cabina/shared';
+import type { ApiResponse, Measures, SizeTableRow, SizeTableCategory, WidgetPublicConfig, FashnGarmentCategory, StimaMisure } from '@cabina/shared';
 import { normalizeProductUrl, VISION_UNAVAILABLE_ERROR } from '@cabina/shared';
 import type { GarmentAnalysis, SelectedGarment } from '../state/types';
 
@@ -115,7 +115,7 @@ export async function estimateMeasuresFromPhoto(
   apiKey: string,
   photoDataUrl: string,
   baseUrl = '',
-): Promise<PartialMeasures> {
+): Promise<StimaMisure> {
   try {
     const sanitizedBase = baseUrl.replace(/\/+$/, '');
     const url = `${sanitizedBase}/api/widget/estimate-measures`;
@@ -139,7 +139,8 @@ export async function estimateMeasuresFromPhoto(
       15_000,
     );
 
-    const body = (await res.json().catch(() => null)) as ApiResponse<PartialMeasures> | null;
+    // Dal 18/09/2026 la risposta porta anche `sex`, se l'AI l'ha riconosciuto.
+    const body = (await res.json().catch(() => null)) as ApiResponse<StimaMisure> | null;
     if (!res.ok) {
       // 2026-07-31: il fallimento resta silenzioso per l'acquirente (form
       // opzionale), non per chi diagnostica. Mai loggare il body della richiesta:

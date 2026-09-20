@@ -47,7 +47,11 @@
     "height_calibration_hint": "Enter your height for more accurate measurements",
     "confirm_and_try": "Confirm and try on",
     "foot": "Foot length (cm) - optional",
-    "invalid_foot": "Foot length: enter a value between 15 and 40 cm"
+    "invalid_foot": "Foot length: enter a value between 15 and 40 cm",
+    "fit": "Fit",
+    "fit_fitted": "Fitted",
+    "fit_regular": "Regular",
+    "fit_relaxed": "Relaxed"
   },
   "rendering": {
     "loading": "Processing...",
@@ -64,7 +68,9 @@
     "recommended_label": "Recommended Size",
     "not_available": "Recommended size not available",
     "between": "Between {{size1}} and {{size2}} — we recommend {{recommended}} for better comfort",
-    "confidence_score": "{{score}}% confidence"
+    "confidence_score": "{{score}}% confidence",
+    "between_smaller": "Between {{size1}} and {{size2}} — we recommend {{recommended}}",
+    "comfort_hint": "Roomier: {{size}} · feel free to pick the size you think is right"
   },
   "browser": {
     "unsupported_title": "Update your browser to use Cabina",
@@ -85,6 +91,9 @@
     "body_curvy": "Curvy",
     "body_curvy_male": "Broad",
     "body_plus": "Plus",
+    "more_button": "More models: age and body type",
+    "more_title": "All models",
+    "more_subtitle": "Choose by age and body type — no photo needed",
     "load_error": "Couldn't load the model, try again or use your photo"
   },
   "garment_select": {
@@ -108,6 +117,10 @@
     "original_alt": "Original photo",
     "generated_alt": "Try-on result",
     "drag_hint": "Drag to compare",
-    "add_to_cart": "Add to cart"
+    "add_to_cart": "Add to cart",
+    "outfit_label": "Complete the look",
+    "outfit_try": "Try together",
+    "outfit_loading": "Putting the look together…",
+    "outfit_error": "The look didn't work, please try again"
   }
 }

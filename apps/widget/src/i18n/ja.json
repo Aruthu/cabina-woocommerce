@@ -1,0 +1,126 @@
+{
+  "common": {
+    "back": "戻る"
+  },
+  "error": {
+    "timeout": "時間切れです — もう一度お試しください",
+    "invalid_api_key": "APIキーが無効です",
+    "internal_error": "内部エラーです — しばらくしてからもう一度お試しください",
+    "invalid_json": "サーバーからの応答が無効です",
+    "config_not_loaded": "設定を読み込めませんでした"
+  },
+  "photo": {
+    "title": "あなたの写真",
+    "posture_hint": "カメラの正面にまっすぐ立ち、腕は体に沿わせて手が見えるようにしてください。ポケットには入れないでください。",
+    "upload_button": "写真をアップロード",
+    "file_too_large": "ファイルが大きすぎます（最大10MB）",
+    "unsupported_format": "対応していない形式です — JPEG、PNG、WebPをご利用ください",
+    "heic_not_supported": "HEIC形式には対応していません — 写真を撮り直すか、JPEGに変換してください",
+    "quality_optimal": "最適",
+    "quality_sufficient": "十分",
+    "quality_low": "低い",
+    "consent_text": "私の写真を外部のAIサービス（試着画像の生成にPrunaAI〈米国〉、サイズの推定と結果の衣服が正しいかの確認にNovita AI〈米国〉）に送信することに同意し、{termini}および{privacy}に同意します。",
+    "consent_terms_label": "利用規約",
+    "consent_privacy_label": "プライバシーポリシー",
+    "consent_required": "写真をアップロードするには、利用規約とプライバシーポリシーに同意してください"
+  },
+  "form": {
+    "title": "あなたのサイズ",
+    "height": "身長（cm）",
+    "weight": "体重（kg）- 任意",
+    "bust": "バスト（cm）",
+    "waist": "ウエスト（cm）",
+    "hips": "ヒップ（cm）",
+    "confirm": "サイズを確定",
+    "cancel": "キャンセル",
+    "auto_detected": "自動で推定しました — 変更できます",
+    "detection_failed": "サイズを検出できませんでした — 手動で入力するか、そのままお進みください",
+    "detection_unavailable": "現在、自動推定をご利用いただけません — もう一度お試しいただくか、手動で入力してください",
+    "detecting": "サイズを検出しています...",
+    "detecting_ai": "AIで分析しています...",
+    "ai_detected": "AIが推定したサイズです — 変更できます",
+    "invalid_height": "身長：100〜220 cmの値を入力してください",
+    "invalid_weight": "体重：30〜250 kgの値を入力してください",
+    "invalid_bust": "バスト：50〜200 cmの値を入力してください",
+    "invalid_waist": "ウエスト：50〜200 cmの値を入力してください",
+    "invalid_hips": "ヒップ：50〜200 cmの値を入力してください",
+    "height_calibration_hint": "より正確なサイズのために身長を入力してください",
+    "confirm_and_try": "確定して試着",
+    "foot": "足の長さ（cm）- 任意",
+    "invalid_foot": "足：15〜40 cmの値を入力してください",
+    "fit": "フィット感",
+    "fit_fitted": "ぴったり",
+    "fit_regular": "普通",
+    "fit_relaxed": "ゆったり"
+  },
+  "rendering": {
+    "loading": "処理しています...",
+    "unavailable": "試着できませんでした。しばらくしてからもう一度お試しください。",
+    "quota_exceeded": "このショップの今月の試着回数の上限に達しました。後ほどもう一度お試しください。",
+    "consent_required": "同意がない場合、あなたの写真で試着画像を作成することはできません。Cabinaのモデルでお試しいただけます。写真は必要ありません。"
+  },
+  "tryon": {
+    "close": "閉じる",
+    "rotate_hint": "ドラッグして回転"
+  },
+  "size": {
+    "recommended": "おすすめのサイズ",
+    "recommended_label": "おすすめサイズ",
+    "not_available": "おすすめのサイズはありません",
+    "between": "{{size1}}と{{size2}}の間です — ゆとりを持たせるため{{recommended}}をおすすめします",
+    "confidence_score": "信頼度 {{score}}%",
+    "between_smaller": "{{size1}}と{{size2}}の間です — {{recommended}}をおすすめします",
+    "comfort_hint": "ゆったりめ：{{size}} · ご自分に合うと思うサイズを選んでください"
+  },
+  "browser": {
+    "unsupported_title": "Cabinaをご利用いただくにはブラウザを更新してください",
+    "unsupported_message": "お使いのブラウザは必要な機能に対応していません。Safari iOS 16以降、Chrome Android 100以降、またはデスクトップ版の最新のChrome、Firefox、Safari、Edgeが必要です。",
+    "update_link_text": "更新方法を見る"
+  },
+  "garment": {
+    "not_clothing_note": "注意：この商品はバーチャル試着に完全には対応していない場合があります"
+  },
+  "model_gallery": {
+    "or_label": "または",
+    "title": "着用するモデルを選ぶ",
+    "subtitle": "あなたに近い体型の人で試着できます — 写真は不要です",
+    "gender_female": "女性",
+    "gender_male": "男性",
+    "body_slim": "スリム",
+    "body_regular": "レギュラー",
+    "body_curvy": "カーヴィー",
+    "body_curvy_male": "がっしり",
+    "body_plus": "プラス",
+    "more_button": "ほかのモデル：年齢と体型",
+    "more_title": "すべてのモデル",
+    "more_subtitle": "年齢と体型で選べます — 写真は不要です",
+    "load_error": "モデルを読み込めませんでした。もう一度お試しいただくか、ご自身の写真をお使いください"
+  },
+  "garment_select": {
+    "title": "何を試着しますか？",
+    "default_action": "Cabinaで試着",
+    "browse_label": "またはコレクションを見る",
+    "add_to_mix": "組み合わせに追加",
+    "remove": "削除",
+    "apply": "適用",
+    "mix_limit_reached": "組み合わせは最大3点までです",
+    "loading": "カタログを読み込んでいます...",
+    "error": "カタログを利用できません"
+  },
+  "reveal_result": {
+    "save": "保存",
+    "share": "共有",
+    "report": "報告",
+    "report_confirm": "ご報告ありがとうございます",
+    "select_style_label": "ほかのアイテムを見る",
+    "slider_label": "比較スライダー",
+    "original_alt": "元の写真",
+    "generated_alt": "試着結果",
+    "drag_hint": "ドラッグして比較",
+    "add_to_cart": "カートに追加",
+    "outfit_label": "コーデを完成させる",
+    "outfit_try": "一緒に試着",
+    "outfit_loading": "コーデを準備しています…",
+    "outfit_error": "コーデを作成できませんでした。もう一度お試しください"
+  }
+}

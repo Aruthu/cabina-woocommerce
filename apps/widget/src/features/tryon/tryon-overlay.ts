@@ -13,12 +13,15 @@ import { createRotationHandler, type RotationHandler } from './rotation-handler'
 import { createZoomHandler, type ZoomHandler, type ZoomTransform } from './zoom-handler';
 import { type SizeRecommendation } from '../size/size-recommendation';
 import { preselectSizeOnPage } from '../size/preselect-size';
-import { getLocaleString } from '../../i18n/i18n';
+import { getLocaleString, getLocaleStringOr } from '../../i18n/i18n';
 import { createRevealSlider } from '../reveal-result/reveal-slider';
 import { createSelectStyle } from '../reveal-result/select-style';
 import { createResultActions } from '../reveal-result/result-actions';
 import { createAddToCartButton } from '../reveal-result/add-to-cart';
 import { tryonGenerative, type CatalogData, type TryonIdentity } from '../../api/widget-api';
+import { leggiProdottiNegozio, proposteOutfit, handleDellaPagina, comeCapoSelezionato } from '../outfit/outfit';
+import { createOutfitPanel } from '../outfit/outfit-panel';
+import type { GarmentCategory, SelectedGarment } from '../../state/types';
 
 let overlayElement: HTMLElement | null = null;
 let rotationHandler: RotationHandler | null = null;
@@ -39,6 +42,18 @@ let currentAngleIndex = 0;
  * istanza, ma è una guardia altrove: qui non ci si appoggia.)
  */
 let sizeBadgeElement: HTMLElement | null = null;
+
+/**
+ * Percentuale accanto alla taglia: SPENTA di default dal 18/09/2026 (Arou).
+ * Il numero è scelto a occhio, non tarato su persone vere, e «95%» su una
+ * taglia sbagliata costa più credibilità di nessun numero. Il merchant che la
+ * vuole la accende dalla dashboard (`widget_configs.show_size_score`); il
+ * widget la imposta qui all'avvio, dalla config pubblica.
+ */
+let showSizeScore = false;
+export function setShowSizeScore(value: boolean): void {
+  showSizeScore = value;
+}
 
 /**
  * Contenitori che il TEMA può offrire per ospitare la prova dentro la pagina
@@ -241,21 +256,42 @@ function buildSizeBadge(recommendation: SizeRecommendation, inline = false): HTM
   sizeText.textContent = recommendation.size;
 
   sizeLine.appendChild(sizeText);
-  sizeLine.appendChild(buildScoreSpan(recommendation.score));
+  if (showSizeScore) sizeLine.appendChild(buildScoreSpan(recommendation.score));
 
   badge.appendChild(label);
   badge.appendChild(sizeLine);
 
   const sub = document.createElement('span');
   sub.style.cssText = 'display:block;font-size:14px;color:rgba(255,255,255,0.85);margin-top:5px;';
-  sub.textContent = recommendation.confidence === 'between' && recommendation.alternative
-    ? getLocaleString('size.between', {
-        size1: recommendation.alternative,
-        size2: recommendation.size,
-        recommended: recommendation.size,
-      })
+  // Le due taglie sempre in ordine crescente. «Per maggiore comfort» solo se il
+  // consiglio è la maggiore: dal 18/09 può essere la minore («M, tra M e L»),
+  // e lì quella frase sarebbe falsa. Il ripiego sulla chiave vecchia vale solo
+  // finché il locale nuovo non è in cache (lezione della 12.6).
+  const alt = recommendation.alternative;
+  sub.textContent = recommendation.confidence === 'between' && alt
+    ? recommendation.alternativeLarger
+      ? getLocaleStringOr('size.between_smaller', 'size.between', {
+          size1: recommendation.size,
+          size2: alt,
+          recommended: recommendation.size,
+        })
+      : getLocaleString('size.between', {
+          size1: alt,
+          size2: recommendation.size,
+          recommended: recommendation.size,
+        })
     : getLocaleString('size.recommended');
   badge.appendChild(sub);
+
+  // Scarpe (18/09/2026, Arou): il numero successivo «se la preferisci più
+  // comoda», e la scelta resta dell'acquirente — il consiglio non la impone.
+  if (recommendation.comfortSize) {
+    const comfort = document.createElement('span');
+    comfort.setAttribute('data-cabina-comfort-size', '');
+    comfort.style.cssText = 'display:block;font-size:13px;color:rgba(255,255,255,0.85);margin-top:4px;';
+    comfort.textContent = getLocaleString('size.comfort_hint', { size: recommendation.comfortSize });
+    badge.appendChild(comfort);
+  }
 
   return badge;
 }
@@ -331,6 +367,9 @@ export function showTryOnOverlay(
   /** Story 12.5: torna allo step "Cosa provi" (garment_select). Se assente
    *  (nessun caso attuale, difensivo), nessun bottone indietro è montato. */
   onBack?: () => void,
+  /** «Completa il look» (18/09/2026): presente solo se il merchant l'ha acceso.
+   *  Il capo della pagina (quello della prima prova) resta sempre il primo. */
+  outfit?: { capoPagina: SelectedGarment; categoriaPagina: GarmentCategory | null },
 ): HTMLElement {
   // Rimuovi eventuale overlay esistente (idempotente)
   removeTryOnOverlay();
@@ -444,7 +483,12 @@ export function showTryOnOverlay(
   // callback esterno `Promise<void>` non poteva mai restituire il nuovo URL al
   // chiamante (code review 12.4, bug architetturale bloccante).
   let bottomBar: HTMLElement | null = null;
-  if (hasFront && catalog && catalog.garments.length > 0 && apiContext) {
+  // ⚠️ 2026-09-18 — fino a oggi la condizione chiedeva anche un catalogo Mix &
+  // Match non vuoto, perché la barra conteneva solo lo «scambia capo» (14/07).
+  // Il 04/09 ci è entrato «Aggiungi al carrello» (#186), e con Salva/Condividi/
+  // Segnala è rimasto nascosto a chi non ha creato collezioni: quasi tutti. Il
+  // catalogo decide il pannello dei capi, non la barra.
+  if (hasFront && apiContext) {
     bottomBar = document.createElement('div');
     bottomBar.setAttribute('data-cabina-tryon-bottom-bar', '');
     bottomBar.style.cssText = [
@@ -461,6 +505,51 @@ export function showTryOnOverlay(
       'transition:opacity 0.3s ease-in-out',
     ].join(';');
 
+    // Il risultato nuovo sostituisce quello in vista: lo stesso per lo scambio e
+    // per il look.
+    const mostraRisultato = (r: { url: string; resultId: string | null }): void => {
+      revealSlider?.updateGenerated(r.url);
+      resultActions?.updateResult(r.url, r.resultId);
+    };
+
+    if (outfit) {
+      // «Completa il look» (18/09/2026): acceso dal merchant, prende il posto
+      // dello scambio. Le proposte arrivano dopo (catalogo del negozio): il
+      // pannello compare quando ci sono, e non compare se non ce ne sono.
+      const posto = document.createElement('div');
+      bottomBar.appendChild(posto);
+      void leggiProdottiNegozio().then((prodotti) => {
+        const capi = proposteOutfit({
+          catalog: catalog ?? null,
+          prodotti,
+          categoriaPagina: outfit.categoriaPagina,
+          handlePagina: handleDellaPagina(window.location.pathname),
+        });
+        if (capi.length === 0 || !posto.isConnected) return;
+        posto.replaceWith(createOutfitPanel(
+          capi,
+          {
+            label: getLocaleString('reveal_result.outfit_label'),
+            tryTogether: getLocaleString('reveal_result.outfit_try'),
+            loading: getLocaleString('reveal_result.outfit_loading'),
+            error: getLocaleString('reveal_result.outfit_error'),
+          },
+          async (selezione) => {
+            const esito = await tryonGenerative(
+              apiContext.apiKey,
+              apiContext.baseUrl,
+              photoData!,
+              [outfit.capoPagina, ...selezione.map(comeCapoSelezionato)],
+              window.location.href,
+              apiContext.identity,
+            );
+            if (!esito.ok) return false;
+            mostraRisultato(esito);
+            return true;
+          },
+        ));
+      });
+    } else if (catalog && catalog.garments.length > 0) {
     const selectStyleUI = createSelectStyle(
       catalog,
       { label: getLocaleString('reveal_result.select_style_label') },
@@ -481,13 +570,13 @@ export function showTryOnOverlay(
           // ha chiesto di ricominciare. Se lo swap non riesce, resta ciò che
           // vede — nessun messaggio che sostituisca un'immagine buona.
           if (!swapResult.ok) return;
-          revealSlider?.updateGenerated(swapResult.url);
-          resultActions?.updateResult(swapResult.url, swapResult.resultId);
+          mostraRisultato(swapResult);
         },
         getPhotoData: () => photoData ?? null,
       },
     );
     bottomBar.appendChild(selectStyleUI);
+    }
 
     /**
      * «Aggiungi al carrello», **prima** delle altre azioni: è il passo che

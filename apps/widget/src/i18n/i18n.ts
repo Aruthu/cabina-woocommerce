@@ -1,4 +1,4 @@
-import type { SupportedLanguage } from '@cabina/shared';
+import { WIDGET_LANGUAGES, type WidgetLanguage } from '@cabina/shared';
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -90,6 +90,10 @@ export interface LocaleDict {
     /** "Curvy" è femminile in più lingue: il maschile ha la sua etichetta. */
     body_curvy_male: string;
     body_plus: string;
+    /** Seconda schermata della galleria (32 modelle per fascia d'età, 2026-09-18). */
+    more_button: string;
+    more_title: string;
+    more_subtitle: string;
     load_error: string;
   };
   garment_select: {
@@ -118,22 +122,28 @@ export interface LocaleDict {
 
 // ── Constants ──────────────────────────────────────────────────────────────
 
-const SUPPORTED_LANGUAGES: SupportedLanguage[] = ['it', 'en', 'fr', 'es', 'de'];
 
-const localeCache = new Map<SupportedLanguage, LocaleDict>();
-const inFlightLocales = new Map<SupportedLanguage, Promise<LocaleDict>>();
+const localeCache = new Map<WidgetLanguage, LocaleDict>();
+const inFlightLocales = new Map<WidgetLanguage, Promise<LocaleDict>>();
 
 let currentLocale: LocaleDict | null = null;
-let currentLocaleLang: SupportedLanguage | null = null;
+let currentLocaleLang: WidgetLanguage | null = null;
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
-function extractPrimaryTag(lang: string): string {
-  return lang.split('-')[0]?.toLowerCase() ?? '';
-}
-
-function isSupported(tag: string): tag is SupportedLanguage {
-  return (SUPPORTED_LANGUAGES as string[]).includes(tag);
+/**
+ * Da un tag di lingua (`ja-JP`, `pt-PT`, `id`) alla lingua del widget, o `null`.
+ *
+ * Due casi speciali (18/09/2026): del portoghese abbiamo solo il brasiliano, e
+ * lo serviamo a qualunque portoghese — a un lettore portoghese si legge bene,
+ * meglio dell'inglese; e `in` è il vecchio codice ISO dell'indonesiano, che
+ * alcuni Android mandano ancora al posto di `id`.
+ */
+function linguaDelWidget(tag: string): WidgetLanguage | null {
+  const primary = tag.split('-')[0]?.toLowerCase() ?? '';
+  if (primary === 'pt') return 'pt-BR';
+  if (primary === 'in') return 'id';
+  return (WIDGET_LANGUAGES as readonly string[]).includes(primary) ? (primary as WidgetLanguage) : null;
 }
 
 // ── Public API ─────────────────────────────────────────────────────────────
@@ -145,13 +155,13 @@ function isSupported(tag: string): tag is SupportedLanguage {
  * 3. defaultLanguage configurato dal merchant
  * 4. Fallback 'en'
  */
-export function resolveLanguage(defaultLanguage: SupportedLanguage): SupportedLanguage {
+export function resolveLanguage(defaultLanguage: WidgetLanguage): WidgetLanguage {
   // 1. document.documentElement.lang
   if (typeof document !== 'undefined' && document.documentElement) {
     const docLang = document.documentElement.lang;
     if (docLang) {
-      const primary = extractPrimaryTag(docLang);
-      if (isSupported(primary)) return primary;
+      const lingua = linguaDelWidget(docLang);
+      if (lingua) return lingua;
     }
   }
 
@@ -159,13 +169,13 @@ export function resolveLanguage(defaultLanguage: SupportedLanguage): SupportedLa
   if (typeof navigator !== 'undefined') {
     const navLang = navigator.language;
     if (navLang) {
-      const primary = extractPrimaryTag(navLang);
-      if (isSupported(primary)) return primary;
+      const lingua = linguaDelWidget(navLang);
+      if (lingua) return lingua;
     }
   }
 
   // 3. defaultLanguage dal merchant
-  if (isSupported(defaultLanguage)) return defaultLanguage;
+  if ((WIDGET_LANGUAGES as readonly string[]).includes(defaultLanguage)) return defaultLanguage;
 
   // 4. Fallback inglese
   return 'en';
@@ -180,7 +190,7 @@ export function resolveLanguage(defaultLanguage: SupportedLanguage): SupportedLa
  * @param baseUrl - URL base del widget (es. 'https://cdn.cabina.io')
  */
 export async function loadLocale(
-  lang: SupportedLanguage,
+  lang: WidgetLanguage,
   baseUrl: string,
 ): Promise<LocaleDict> {
   const cached = localeCache.get(lang);
@@ -240,7 +250,7 @@ export function getLocale(): LocaleDict | null {
 /**
  * Restituisce la lingua del locale corrente.
  */
-export function getCurrentLanguage(): SupportedLanguage | null {
+export function getCurrentLanguage(): WidgetLanguage | null {
   return currentLocaleLang;
 }
 
@@ -261,9 +271,9 @@ export function getCurrentLanguage(): SupportedLanguage | null {
  * leggerebbe la chiave grezza, es. `photo.heic_not_supported`. Meglio un
  * messaggio meno preciso ma in lingua.
  */
-export function getLocaleStringOr(key: string, fallbackKey: string): string {
-  const value = getLocaleString(key);
-  return value === key ? getLocaleString(fallbackKey) : value;
+export function getLocaleStringOr(key: string, fallbackKey: string, vars?: Record<string, string>): string {
+  const value = getLocaleString(key, vars);
+  return value === key ? getLocaleString(fallbackKey, vars) : value;
 }
 
 export function getLocaleString(

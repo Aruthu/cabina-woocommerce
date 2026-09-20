@@ -47,7 +47,7 @@ export function widgetReducer(context: WidgetContext, event: WidgetEvent): Widge
       // scuola, è ciò che accade quando il tema non espone l'immagine del
       // prodotto (`extractProductImageUrl` → null, successo su WooCommerce).
       if (event.type === 'MEASURES_CONFIRMED') {
-        const base = { ...context, measures: event.measures, measureSource: event.measureSource ?? 'manual' };
+        const base = { ...context, measures: event.measures, measureSource: event.measureSource ?? 'manual', fit: event.fit ?? 'regular' };
         return event.garments && event.garments.length > 0
           ? { ...base, state: 'rendering' as const, selectedGarments: event.garments, error: null }
           : { ...base, state: 'garment_select' as const };

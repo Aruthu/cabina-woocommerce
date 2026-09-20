@@ -1,0 +1,126 @@
+{
+  "common": {
+    "back": "Kembali"
+  },
+  "error": {
+    "timeout": "Waktu habis — silakan coba lagi",
+    "invalid_api_key": "Kunci API tidak valid",
+    "internal_error": "Terjadi kesalahan internal — silakan coba lagi nanti",
+    "invalid_json": "Respons dari server tidak valid",
+    "config_not_loaded": "Konfigurasi tidak termuat"
+  },
+  "photo": {
+    "title": "Foto Anda",
+    "posture_hint": "Berdiri tegak menghadap kamera: lengan di samping badan dan tangan terlihat, jangan di dalam saku.",
+    "upload_button": "Unggah foto",
+    "file_too_large": "Berkas terlalu besar, maksimal 10MB",
+    "unsupported_format": "Format tidak didukung — gunakan JPEG, PNG, atau WebP",
+    "heic_not_supported": "Format HEIC tidak didukung — ambil foto atau ubah ke JPEG",
+    "quality_optimal": "Sangat baik",
+    "quality_sufficient": "Cukup",
+    "quality_low": "Rendah",
+    "consent_text": "Saya setuju foto saya dikirim ke layanan kecerdasan buatan eksternal — PrunaAI (Amerika Serikat) untuk membuat hasil coba, dan Novita AI (Amerika Serikat) untuk memperkirakan ukuran dan memeriksa bahwa pakaian pada hasil adalah yang asli — dan saya menerima {termini} serta {privacy}.",
+    "consent_terms_label": "Syarat dan ketentuan",
+    "consent_privacy_label": "Kebijakan privasi",
+    "consent_required": "Terima syarat dan ketentuan serta kebijakan privasi untuk mengunggah foto Anda"
+  },
+  "form": {
+    "title": "Ukuran Anda",
+    "height": "Tinggi badan (cm)",
+    "weight": "Berat badan (kg) - opsional",
+    "bust": "Lingkar dada (cm)",
+    "waist": "Lingkar pinggang (cm)",
+    "hips": "Lingkar pinggul (cm)",
+    "confirm": "Konfirmasi ukuran",
+    "cancel": "Batal",
+    "auto_detected": "Diperkirakan otomatis — Anda dapat mengubahnya",
+    "detection_failed": "Kami tidak dapat mendeteksi ukuran Anda — masukkan secara manual atau lanjutkan tanpa ukuran",
+    "detection_unavailable": "Perkiraan otomatis sedang tidak tersedia — coba lagi atau masukkan ukuran secara manual",
+    "detecting": "Mendeteksi ukuran...",
+    "detecting_ai": "Analisis AI sedang berjalan...",
+    "ai_detected": "Ukuran diperkirakan oleh AI — Anda dapat mengubahnya",
+    "invalid_height": "Tinggi badan: masukkan nilai antara 100 dan 220 cm",
+    "invalid_weight": "Berat badan: masukkan nilai antara 30 dan 250 kg",
+    "invalid_bust": "Lingkar dada: masukkan nilai antara 50 dan 200 cm",
+    "invalid_waist": "Lingkar pinggang: masukkan nilai antara 50 dan 200 cm",
+    "invalid_hips": "Lingkar pinggul: masukkan nilai antara 50 dan 200 cm",
+    "height_calibration_hint": "Masukkan tinggi badan Anda untuk ukuran yang lebih akurat",
+    "confirm_and_try": "Konfirmasi dan coba",
+    "foot": "Panjang kaki (cm) - opsional",
+    "invalid_foot": "Kaki: masukkan nilai antara 15 dan 40 cm",
+    "fit": "Potongan",
+    "fit_fitted": "Pas badan",
+    "fit_regular": "Normal",
+    "fit_relaxed": "Longgar"
+  },
+  "rendering": {
+    "loading": "Sedang diproses...",
+    "unavailable": "Gagal mencoba. Silakan coba lagi sebentar lagi.",
+    "quota_exceeded": "Kuota coba toko ini untuk bulan ini sudah habis. Silakan coba lagi nanti.",
+    "consent_required": "Tanpa persetujuan Anda, kami tidak dapat membuat hasil coba dengan foto Anda. Anda dapat mencoba pakaian ini pada model Cabina: tidak perlu foto."
+  },
+  "tryon": {
+    "close": "Tutup",
+    "rotate_hint": "Seret untuk memutar"
+  },
+  "size": {
+    "recommended": "Ukuran yang disarankan",
+    "recommended_label": "Ukuran Disarankan",
+    "not_available": "Ukuran yang disarankan tidak tersedia",
+    "between": "Di antara {{size1}} dan {{size2}} — kami sarankan {{recommended}} agar lebih nyaman",
+    "confidence_score": "Keandalan {{score}}%",
+    "between_smaller": "Di antara {{size1}} dan {{size2}} — kami sarankan {{recommended}}",
+    "comfort_hint": "Lebih longgar: {{size}} · silakan pilih ukuran yang menurut Anda pas"
+  },
+  "browser": {
+    "unsupported_title": "Perbarui peramban Anda untuk menggunakan Cabina",
+    "unsupported_message": "Peramban Anda tidak mendukung fitur yang diperlukan. Kami memerlukan Safari iOS 16+, Chrome Android 100+, atau versi terbaru Chrome, Firefox, Safari, atau Edge di desktop.",
+    "update_link_text": "Pelajari cara memperbarui"
+  },
+  "garment": {
+    "not_clothing_note": "Catatan: produk ini mungkin tidak sepenuhnya mendukung coba virtual"
+  },
+  "model_gallery": {
+    "or_label": "atau",
+    "title": "Pilih siapa yang memakainya",
+    "subtitle": "Coba pakaian ini pada orang dengan bentuk tubuh seperti Anda — tanpa perlu foto",
+    "gender_female": "Wanita",
+    "gender_male": "Pria",
+    "body_slim": "Ramping",
+    "body_regular": "Reguler",
+    "body_curvy": "Curvy",
+    "body_curvy_male": "Kekar",
+    "body_plus": "Plus",
+    "more_button": "Model lainnya: usia dan bentuk tubuh",
+    "more_title": "Semua model",
+    "more_subtitle": "Pilih berdasarkan usia dan bentuk tubuh — tanpa perlu foto",
+    "load_error": "Model tidak dapat dimuat, coba lagi atau gunakan foto Anda"
+  },
+  "garment_select": {
+    "title": "Apa yang ingin Anda coba?",
+    "default_action": "Coba di Cabina",
+    "browse_label": "Atau lihat koleksi",
+    "add_to_mix": "Tambahkan ke padu padan",
+    "remove": "Hapus",
+    "apply": "Terapkan",
+    "mix_limit_reached": "Maksimal 3 pakaian per padu padan",
+    "loading": "Memuat katalog...",
+    "error": "Katalog tidak tersedia"
+  },
+  "reveal_result": {
+    "save": "Simpan",
+    "share": "Bagikan",
+    "report": "Laporkan",
+    "report_confirm": "Terima kasih atas laporan Anda",
+    "select_style_label": "Lihat pakaian lain",
+    "slider_label": "Penggeser perbandingan",
+    "original_alt": "Foto asli",
+    "generated_alt": "Hasil coba",
+    "drag_hint": "Seret untuk membandingkan",
+    "add_to_cart": "Tambahkan ke keranjang",
+    "outfit_label": "Lengkapi tampilan",
+    "outfit_try": "Coba bersama",
+    "outfit_loading": "Menyiapkan tampilan…",
+    "outfit_error": "Tampilan gagal dibuat, silakan coba lagi"
+  }
+}

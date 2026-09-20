@@ -16,12 +16,13 @@ import {
   shouldAttemptGenerative,
   CURRENT_PHOTO_CONSENT_VERSION,
 } from './features/photo-consent/photo-consent-storage';
-import { createModelGallery, resolveModelThumbs, setModelError, fetchModelAsDataUrl } from './features/model-gallery/model-gallery';
+import { createModelGallery, createMoreModelsScreen, resolveModelThumbs, setModelError, fetchModelAsDataUrl } from './features/model-gallery/model-gallery';
+import type { PresetModel } from './features/model-gallery/presets';
 import { createGarmentSelect, resolvePageGarmentParams, type PageGarmentParams } from './features/garment-select/garment-select';
-import { showTryOnOverlay, removeTryOnOverlay, updateSizeBadge } from './features/tryon/tryon-overlay';
+import { showTryOnOverlay, removeTryOnOverlay, updateSizeBadge, setShowSizeScore } from './features/tryon/tryon-overlay';
 import { recommendFromTables, stimaPiedeDaAltezza } from './features/size/size-recommendation';
 import { fetchSizeTables } from './api/widget-api';
-import type { SupportedLanguage, WidgetPublicConfig, Measures } from '@cabina/shared';
+import type { WidgetLanguage, WidgetPublicConfig, Measures } from '@cabina/shared';
 import { BUTTON_ANCHORS, BUTTON_TARGET_ATTR, AUTO_OPEN_PARAM, AUTO_OPEN_VALUE } from '@cabina/shared';
 import type { GarmentAnalysis, GarmentCategory } from './state/types';
 
@@ -97,7 +98,7 @@ export function __resetWidgetForTesting(): void {
   if (timerReinserimento) clearTimeout(timerReinserimento);
   timerReinserimento = null;
 }
-let currentLang: SupportedLanguage | null = null;
+let currentLang: WidgetLanguage | null = null;
 let currentApiKey: string | null = null;
 // Story 7.4 (ri-cablata 2026-07-15): id della widget_session creata da
 // notifySessionStart. Serve al completamento fire-and-forget quando
@@ -147,6 +148,8 @@ let currentLogoUrl: string | null = null; // Logo del merchant (branding), mostr
 // Story 12.5 (Task 2.5): colore brand del merchant, filato nei moduli step UI
 // sulle sole azioni primarie (AC3). Default = fallback di sanitizeColor.
 let currentPrimaryColor = '#1a1a1a';
+/** «Completa il look» acceso dal merchant (config pubblica, 18/09/2026). */
+let outfitAttivo = false;
 
 function sanitizeColor(value: string, fallback = '#1a1a1a'): string {
   return /^#[0-9a-fA-F]{6}$/.test(value) ? value : fallback;
@@ -554,47 +557,67 @@ function renderState(button: HTMLElement): void {
         orLabel.style.cssText = 'text-align:center;color:#9ca3af;font-size:12px;margin:16px 0 8px;text-transform:uppercase;letter-spacing:0.05em;';
         content.appendChild(orLabel);
 
+        // La selezione converte l'asset in data URL (contratto photoData
+        // invariato verso tryonGenerative/callRenderApi) e dispatcha
+        // PRESET_MODEL_SELECTED → form misure (Proposta a 2026-07-31).
+        // Una sola funzione per le due schermate della galleria.
+        const onModelSelected = async (model: PresetModel): Promise<void> => {
+          // Guard re-entrancy (P1 code review): un secondo click durante la
+          // fetch in volo verrebbe ignorato — niente doppio rendering/FASHN.
+          if (modelSelectionInFlight) return;
+          modelSelectionInFlight = true;
+
+          const baseUrl = widgetContext.baseUrl ?? '';
+          const modalContent = overlay.querySelector('[data-cabina-modal-content]');
+          // Reset di un eventuale errore precedente prima del nuovo tentativo (P7).
+          if (modalContent) setModelError(modalContent, '');
+          try {
+            // Normalizzata come una foto caricata: gli asset preset sono già
+            // leggeri, ma così il formato a valle è davvero uno solo — è ciò
+            // che photo-utils dichiara e su cui i consumatori possono contare.
+            const dataUrl = await downscalePhotoDataUrl(
+              await fetchModelAsDataUrl(baseUrl, model.assetPath),
+            );
+            // Guard di ciclo di vita (P5): se durante i (fino a) 5s di fetch la
+            // sessione è cambiata (modale chiuso/riaperto), NON dirottare la
+            // nuova sessione in rendering con la modella vecchia.
+            if (widgetContext.state !== 'photo') return;
+            widgetContext = widgetReducer(widgetContext, { type: 'PRESET_MODEL_SELECTED', dataUrl });
+            renderState(button);
+          } catch (e) {
+            // Silent non-blocking: mostra errore inline nella galleria,
+            // resta sullo step 'photo' (l'acquirente può riprovare o usare la foto).
+            console.warn('[widget] Failed to load preset model', model.assetPath, e);
+            const errTarget = overlay.querySelector('[data-cabina-modal-content]');
+            if (errTarget) setModelError(errTarget, getLocaleString('model_gallery.load_error'));
+          } finally {
+            modelSelectionInFlight = false;
+          }
+        };
+
         const gallery = createModelGallery(
           {
             title: getLocaleString('model_gallery.title'),
             subtitle: getLocaleString('model_gallery.subtitle'),
           },
           {
-            // La selezione converte l'asset in data URL (contratto photoData
-            // invariato verso tryonGenerative/callRenderApi) e dispatcha
-            // PRESET_MODEL_SELECTED → form misure (Proposta a 2026-07-31).
-            onModelSelected: async (model) => {
-              // Guard re-entrancy (P1 code review): un secondo click durante la
-              // fetch in volo verrebbe ignorato — niente doppio rendering/FASHN.
-              if (modelSelectionInFlight) return;
-              modelSelectionInFlight = true;
-
-              const baseUrl = widgetContext.baseUrl ?? '';
-              const modalContent = overlay.querySelector('[data-cabina-modal-content]');
-              // Reset di un eventuale errore precedente prima del nuovo tentativo (P7).
-              if (modalContent) setModelError(modalContent, '');
-              try {
-                // Normalizzata come una foto caricata: gli asset preset sono già
-                // leggeri, ma così il formato a valle è davvero uno solo — è ciò
-                // che photo-utils dichiara e su cui i consumatori possono contare.
-                const dataUrl = await downscalePhotoDataUrl(
-                  await fetchModelAsDataUrl(baseUrl, model.assetPath),
-                );
-                // Guard di ciclo di vita (P5): se durante i (fino a) 5s di fetch la
-                // sessione è cambiata (modale chiuso/riaperto), NON dirottare la
-                // nuova sessione in rendering con la modella vecchia.
-                if (widgetContext.state !== 'photo') return;
-                widgetContext = widgetReducer(widgetContext, { type: 'PRESET_MODEL_SELECTED', dataUrl });
-                renderState(button);
-              } catch (e) {
-                // Silent non-blocking: mostra errore inline nella galleria,
-                // resta sullo step 'photo' (l'acquirente può riprovare o usare la foto).
-                console.warn('[widget] Failed to load preset model', model.assetPath, e);
-                const errTarget = overlay.querySelector('[data-cabina-modal-content]');
-                if (errTarget) setModelError(errTarget, getLocaleString('model_gallery.load_error'));
-              } finally {
-                modelSelectionInFlight = false;
-              }
+            onModelSelected,
+            // Seconda schermata DENTRO la cabina (2026-09-18): lo stato resta
+            // `photo`, cambia solo il contenuto del modale. «← Indietro» ridisegna
+            // lo step `photo` com'era — nessun evento nuovo nel reducer.
+            onShowMore: () => {
+              content.innerHTML = '';
+              restoreDragHandle(content);
+              renderBackButton(content, () => renderState(button));
+              content.appendChild(createMoreModelsScreen(
+                {
+                  title: getLocaleString('model_gallery.more_title'),
+                  subtitle: getLocaleString('model_gallery.more_subtitle'),
+                },
+                onModelSelected,
+              ));
+              resolveModelThumbs(content, widgetContext.baseUrl ?? '');
+              content.scrollTop = 0;
             },
           },
         );
@@ -668,9 +691,14 @@ function renderState(button: HTMLElement): void {
           // che il form usa quando il locale non ha ancora la chiave.
           foot: senzaChiave(getLocaleString('form.foot')),
           invalidFoot: senzaChiave(getLocaleString('form.invalid_foot')),
+          // Vestibilità (18/09/2026): stessi fallback del piede.
+          fit: senzaChiave(getLocaleString('form.fit')),
+          fitFitted: senzaChiave(getLocaleString('form.fit_fitted')),
+          fitRegular: senzaChiave(getLocaleString('form.fit_regular')),
+          fitRelaxed: senzaChiave(getLocaleString('form.fit_relaxed')),
         },
         {
-          onConfirm: async (measures, measureSource) => {
+          onConfirm: async (measures, measureSource, fit) => {
             // 2026-08-03: da qui si va dritti in cabina, saltando "Cosa provi" —
             // il capo è quello della pagina su cui l'acquirente si trova già.
             // Senza immagine estraibile (tema che non espone og:image) i capi
@@ -697,14 +725,14 @@ function renderState(button: HTMLElement): void {
             // tornare indietro: senza questo, una generazione da 30 crediti
             // partirebbe da uno step che l'acquirente ha già lasciato.
             if (widgetContext.state !== 'form') return;
-            widgetContext = widgetReducer(widgetContext, { type: 'MEASURES_CONFIRMED', measures, measureSource, garments });
+            widgetContext = widgetReducer(widgetContext, { type: 'MEASURES_CONFIRMED', measures, measureSource, fit, garments });
             renderState(button);
           },
           onCancel: () => {
             widgetContext = widgetReducer(widgetContext, { type: 'CLOSE' });
             renderState(button);
           },
-          // ⚠️ Alla stima misure la foto va a 1024px, non ai 1600 del try-on.
+          // ⚠️ Alla stima misure la foto va a 1024px, non ai 2048 del try-on.
           // A 1600 la vision impiega ~5,3s contro i ~7s di budget del primo
           // provider: ogni tanto sforava e rispondeva un SECONDO modello, con
           // misure sue — ed è da lì che veniva «la stima balla fra una prova e
@@ -1041,6 +1069,11 @@ function renderState(button: HTMLElement): void {
           widgetContext = widgetReducer(widgetContext, { type: 'BACK' });
           renderState(button);
         },
+        // «Completa il look»: solo se acceso, e partendo dal capo della prima
+        // prova — il capo della pagina resta sempre il primo.
+        outfitAttivo && widgetContext.selectedGarments?.[0]
+          ? { capoPagina: widgetContext.selectedGarments[0], categoriaPagina: garmentAnalysis?.category ?? null }
+          : undefined,
       );
 
       // Fetch size tables e calcola raccomandazione in background (Story 4.2)
@@ -1068,6 +1101,7 @@ function renderState(button: HTMLElement): void {
                 measureSource: widgetContext.measureSource ?? undefined,
                 garment: garmentAnalysis,
                 footEstimated,
+                fit: widgetContext.fit ?? undefined,
               });
               console.log(
                 `[widget] size-table=${scelta?.table.name ?? '-'} category=${garmentAnalysis?.category ?? 'unknown'} candidate=${scelta?.candidates ?? 0}`,
@@ -1273,6 +1307,11 @@ export async function initWidget(apiKey: string, baseUrl = ''): Promise<void> {
   currentLogoUrl = sanitizeLogoUrl(config.logoUrl);
   // Story 12.5 (Task 2.5): colore brand, riusa sanitizeColor già esistente (no duplicazione validazione).
   currentPrimaryColor = sanitizeColor(config.primaryColor);
+  // Solo `true` lo accende: una config vecchia in cache non ha il campo.
+  outfitAttivo = config.outfitEnabled === true;
+  // Percentuale della taglia: solo se il merchant l'ha chiesta (18/09/2026).
+  // Solo `true` la accende: un campo assente (config vecchia in cache) la lascia spenta.
+  setShowSizeScore(config.showSizeScore === true);
 
   // Story 5.2: Notifica inizio sessione — se il piano è esaurito (SESSION_LIMIT_REACHED),
   // non renderizzare il pulsante e non caricare i locale.
@@ -1437,6 +1476,6 @@ function startGarmentAnalysis(apiKey: string, baseUrl: string): void {
  * Restituisce la lingua corrente del widget dopo l'inizializzazione.
  * Null se initWidget non è ancora stato chiamato o è fallito.
  */
-export function getWidgetLanguage(): SupportedLanguage | null {
+export function getWidgetLanguage(): WidgetLanguage | null {
   return currentLang;
 }

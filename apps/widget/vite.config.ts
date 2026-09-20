@@ -10,7 +10,9 @@ function copyLocales() {
       const src = path.resolve(__dirname, 'src/i18n');
       const dest = path.resolve(__dirname, 'dist/locales');
       if (!existsSync(dest)) mkdirSync(dest, { recursive: true });
-      for (const file of ['it.json', 'en.json', 'fr.json', 'es.json', 'de.json']) {
+      // Tutti i .json di src/i18n (18/09/2026): con ja, pt-BR e id le lingue sono
+      // otto, e un elenco scritto qui era un secondo posto da ricordare.
+      for (const file of readdirSync(src).filter((f) => f.endsWith('.json'))) {
         try {
           copyFileSync(path.resolve(src, file), path.resolve(dest, file));
         } catch (err) {

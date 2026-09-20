@@ -208,7 +208,7 @@
 // ⚠️ 2026-08-22 (4) — la casella del consenso nasce VUOTA ogni volta: prima
 // rinasceva spuntata dal `localStorage`, e l'acquirente la trovava accettata al
 // posto suo. Il salvataggio resta per la stessa visita e come traccia.
-export const WIDGET_SRI = 'sha384-FZTRn6e1kuDLLrXz/mmVEsrStfvf2AUjs1KHkWgafy0JZu4ZWxm0q5lx1rouxZ4G';
+export const WIDGET_SRI = 'sha384-Dwec0IP7W1GqmgftM3P3JhuIEOLjJ+Mn2XiQk3ZFCR/Rh8ufzxGcSEDhxuBhaXrg';
 
 /**
  * URL pubblico del bundle widget. Fonte unica per snippet manuale, ScriptTag

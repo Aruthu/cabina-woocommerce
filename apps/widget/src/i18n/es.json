@@ -47,7 +47,11 @@
     "height_calibration_hint": "Ingresa tu altura para medidas más precisas",
     "confirm_and_try": "Confirmar y probar",
     "foot": "Longitud del pie (cm) - opcional",
-    "invalid_foot": "Pie: ingresa un valor entre 15 y 40 cm"
+    "invalid_foot": "Pie: ingresa un valor entre 15 y 40 cm",
+    "fit": "Ajuste",
+    "fit_fitted": "Ajustado",
+    "fit_regular": "Normal",
+    "fit_relaxed": "Holgado"
   },
   "rendering": {
     "loading": "Procesando...",
@@ -64,7 +68,9 @@
     "recommended_label": "Talla Recomendada",
     "not_available": "Talla recomendada no disponible",
     "between": "Entre {{size1}} y {{size2}} — recomendamos {{recommended}} para mayor comodidad",
-    "confidence_score": "{{score}}% de confianza"
+    "confidence_score": "{{score}}% de confianza",
+    "between_smaller": "Entre {{size1}} y {{size2}} — recomendamos {{recommended}}",
+    "comfort_hint": "Más cómoda: {{size}} · elige el número que te parezca adecuado"
   },
   "browser": {
     "unsupported_title": "Actualiza tu navegador para usar Cabina",
@@ -85,6 +91,9 @@
     "body_curvy": "Curvy",
     "body_curvy_male": "Robusto",
     "body_plus": "Plus",
+    "more_button": "Más modelos: edad y complexión",
+    "more_title": "Todos los modelos",
+    "more_subtitle": "Elige por edad y complexión — no necesitas foto",
     "load_error": "No se pudo cargar el modelo, inténtalo de nuevo o usa tu foto"
   },
   "garment_select": {
@@ -108,6 +117,10 @@
     "original_alt": "Foto original",
     "generated_alt": "Resultado del try-on",
     "drag_hint": "Desliza para comparar",
-    "add_to_cart": "Añadir al carrito"
+    "add_to_cart": "Añadir al carrito",
+    "outfit_label": "Completa el look",
+    "outfit_try": "Probar juntos",
+    "outfit_loading": "Preparando el look…",
+    "outfit_error": "El look no ha salido, inténtalo de nuevo"
   }
 }

@@ -128,9 +128,16 @@ export function getQualityLabel(quality: PhotoQuality, locale: Record<string, st
 // principale; il vincolo "MediaPipe sfora i 4s" citato qui non esiste più,
 // MediaPipe è stato rimosso (vedi `docs/wiki/stima-misure.md`).
 
-/** Lato lungo massimo della foto dopo il resize. 1600px bastano a FASHN
- *  (output ~1024px) e lasciano la foto ≥1MP → quality gate "optimal" invariato. */
-export const PHOTO_MAX_EDGE_PX = 1600;
+/** Lato lungo massimo della foto dopo il resize.
+ *
+ *  ⚠️ 2026-09-11 — da 1600 a **2048**. I 1600 erano tarati su FASHN, che aveva
+ *  un tetto interno a ~1,1 MP. `p-image-try-on` di Pruna restituisce la
+ *  **risoluzione dell'input**: misurato l'11/09, 1363×2048 in ingresso dà
+ *  1363×2048 in uscita nello stesso tempo del 1154 (5,7-6,5 s contro 5,4-6,4) e
+ *  con la stampa del capo intatta — dove l'upscale la ridisegnava. Qui si decide
+ *  quindi la risoluzione del risultato, preset comprese (1360×2048).
+ *  La stima misure resta a 1024 (`MEASURE_MAX_EDGE_PX`). */
+export const PHOTO_MAX_EDGE_PX = 2048;
 /**
  * Lato lungo della foto inviata alla STIMA MISURE, più corto di quello usato per
  * il try-on.
@@ -152,10 +159,13 @@ export const PHOTO_JPEG_QUALITY = 0.85;
 /** Qualità WebP della ricodifica dopo il resize (formato preferito, Story 12.6):
  *  −17% sul peso rispetto al JPEG a parità di foto, misurato nel pre-check. */
 export const PHOTO_WEBP_QUALITY = 0.85;
-/** Oltre questa lunghezza il data URL si avvicina al limite della route
- *  estimate-measures (1,5M char): ricodifichiamo anche se le dimensioni già
- *  rientrano (foto piccole in pixel ma enormi in byte, es. JPEG qualità 100). */
-const DATA_URL_SAFE_LENGTH = 1_200_000;
+/** Oltre questa lunghezza la foto normalizzata si avvicina al limite più stretto
+ *  che incontra: il corpo di `tryon-generative`, ~4,5 MB sulla piattaforma Vercel.
+ *  Serve solo a dirlo nel log (vedi la post-condizione in `downscalePhotoDataUrl`).
+ *  ⚠️ 2026-09-11 — era 1,2M, tarato sul limite di `estimate-measures` (1,5M char):
+ *  ma alla stima misure la foto arriva a 1024 px, ben sotto; a 2048 px una foto
+ *  normale supera 1,2M e il log avrebbe gridato al lupo a ogni prova. */
+const DATA_URL_SAFE_LENGTH = 4_000_000;
 
 /**
  * Dimensioni ridotte per stare entro `maxEdge` preservando l'aspect ratio.

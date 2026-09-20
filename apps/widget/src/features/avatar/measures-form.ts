@@ -1,6 +1,7 @@
-import type { Measures } from '@cabina/shared';
-import type { MeasureSource } from '../size/size-recommendation';
+import type { Measures, StimaMisure } from '@cabina/shared';
+import type { FitPreference, MeasureSource } from '../size/size-recommendation';
 import { calibrateCircumferences, REFERENCE_HEIGHT_CM } from './measure-estimation';
+import { misureDaAltezzaPeso, type Sesso } from './stima-da-peso';
 import { VISION_UNAVAILABLE_ERROR } from '@cabina/shared';
 
 export interface MeasuresFormStrings {
@@ -28,15 +29,21 @@ export interface MeasuresFormStrings {
    *  vecchio del bundle mancano, e il form ripiega sull'inglese. */
   foot?: string;
   invalidFoot?: string;
+  /** Vestibilità (18/09/2026). Opzionali per la stessa ragione del piede. */
+  fit?: string;
+  fitFitted?: string;
+  fitRegular?: string;
+  fitRelaxed?: string;
 }
 
 export interface MeasuresFormCallbacks {
   /** Può restituire una Promise: il bottone resta spento finché non si risolve
    *  (la conferma ora avvia una generazione a pagamento, non un cambio schermata). */
-  onConfirm: (measures: Partial<Measures>, source: MeasureSource) => void | Promise<void>;
+  onConfirm: (measures: Partial<Measures>, source: MeasureSource, fit: FitPreference) => void | Promise<void>;
   onCancel: () => void;
   /** Stima le misure dalla foto chiamando il backend AI Vision (livello 1) */
-  onRequestAiEstimate?: (photoDataUrl: string) => Promise<Partial<Measures>>;
+  /** Dal 18/09/2026 può portare anche `sex`: affina la formula altezza+peso. */
+  onRequestAiEstimate?: (photoDataUrl: string) => Promise<StimaMisure>;
 }
 
 export interface MeasuresFormConfig {
@@ -86,6 +93,9 @@ export function createMeasuresForm(
   primaryColor = '#1a1a1a',
   /** Mostra «Lunghezza piede»: solo per le scarpe (05/09/2026). */
   mostraPiede = false,
+  /** Sesso, se noto (es. la modella preset scelta): affina la formula da
+   *  altezza e peso. Assente = formula senza sesso (18/09/2026). */
+  sesso: Sesso | null = null,
 ): HTMLElement {
   const container = document.createElement('div');
   container.setAttribute('data-cabina-measures-form', '');
@@ -190,6 +200,11 @@ export function createMeasuresForm(
   // Campi effettivamente popolati da un'auto-rilevazione (per mostrare la label
   // "Stimato automaticamente" solo dove ha senso).
   const autoFilledFields = new Set<MeasureField>();
+  /** Le circonferenze in pagina vengono dalla formula altezza+peso (18/09/2026). */
+  let stimeDalPeso = false;
+  /** Sesso per la formula: quello passato (modella preset) vince su quello letto
+   *  dalla foto dall'AI, che arriva con la stima (18/09/2026). */
+  let sessoFormula: Sesso | null = sesso;
   let heightHintEl: HTMLElement | null = null;
 
   const fieldNames: MeasureField[] = ['heightCm', 'weightKg', 'bustCm', 'waistCm', 'hipsCm'];
@@ -286,6 +301,10 @@ export function createMeasuresForm(
         recalibrateFromHeight();
         updateAutoLabel('heightCm');
         updateHeightHint();
+      } else if (fieldName === 'weightKg') {
+        // Il peso, come l'altezza, è un ingresso della stima e non una misura
+        // della taglia: non rende «manuale» nulla (18/09/2026).
+        recalibrateFromHeight();
       } else if (input.value.trim() === '') {
         // Campo circonferenziale svuotato → torna "auto": rimosso da manualFields
         // così la calibrazione lo ripopola dalla base auto-rilevata.
@@ -328,6 +347,54 @@ export function createMeasuresForm(
 
     container.appendChild(wrapper);
   }
+
+  // ── Vestibilità (18/09/2026, Arou) ────────────────────────────────────
+  // «Aderente / Normale / Comoda»: una scelta sola, per vestiti e scarpe. Nasce
+  // Normale ogni volta, come le misure (che non si salvano più dal 16/08). Tre
+  // bottoni con `aria-pressed` e non un <select>: si vede tutto a colpo d'occhio.
+  let fit: FitPreference = 'regular';
+  const fitWrap = document.createElement('div');
+  fitWrap.setAttribute('data-cabina-fit', '');
+  fitWrap.style.cssText = 'margin:4px 0 12px;';
+  const fitLabel = document.createElement('div');
+  fitLabel.textContent = strings.fit ?? 'Fit';
+  fitLabel.style.cssText = 'font-size:14px;font-weight:500;color:#374151;margin-bottom:4px;';
+  fitWrap.appendChild(fitLabel);
+  const fitRow = document.createElement('div');
+  fitRow.setAttribute('role', 'group');
+  fitRow.setAttribute('aria-label', strings.fit ?? 'Fit');
+  fitRow.style.cssText = 'display:flex;gap:6px;';
+  const fitButtons: Array<[FitPreference, HTMLButtonElement]> = [];
+  const fitOptions: Array<[FitPreference, string]> = [
+    ['fitted', strings.fitFitted ?? 'Fitted'],
+    ['regular', strings.fitRegular ?? 'Regular'],
+    ['relaxed', strings.fitRelaxed ?? 'Relaxed'],
+  ];
+  const paintFit = (): void => {
+    for (const [value, b] of fitButtons) {
+      const on = value === fit;
+      b.setAttribute('aria-pressed', on ? 'true' : 'false');
+      b.style.background = on ? primaryColor : '#fff';
+      b.style.color = on ? '#fff' : '#1a1a1a';
+      b.style.borderColor = on ? primaryColor : '#d1d5db';
+    }
+  };
+  for (const [value, text] of fitOptions) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.textContent = text;
+    b.setAttribute('data-cabina-fit-option', value);
+    b.style.cssText = 'flex:1;padding:8px 4px;border:1px solid #d1d5db;border-radius:4px;font-size:13px;font-family:inherit;cursor:pointer;';
+    b.addEventListener('click', () => {
+      fit = value;
+      paintFit();
+    });
+    fitButtons.push([value, b]);
+    fitRow.appendChild(b);
+  }
+  paintFit();
+  fitWrap.appendChild(fitRow);
+  container.appendChild(fitWrap);
 
   // ── Bottoni ───────────────────────────────────────────────────────────
   const buttonRow = document.createElement('div');
@@ -430,10 +497,41 @@ export function createMeasuresForm(
    * vuota/non valida → ripristina i valori base (scala 1).
    */
   function recalibrateFromHeight(): void {
+    const numero = (field: HTMLInputElement, min: number, max: number): number | null => {
+      const raw = field.value.trim();
+      const n = raw === '' ? NaN : parseFloat(normalizeDecimal(raw));
+      return !isNaN(n) && n >= min && n <= max ? n : null;
+    };
+    const target = numero(fields.heightCm, 100, 220);
+
+    // 18/09/2026 — con altezza E peso le circonferenze vengono dalla formula
+    // ANSUR (`stima-da-peso.ts`), non dalla foto: la foto schiaccia magri e
+    // obesi verso la media, il peso no. I campi scritti a mano restano intatti.
+    const peso = numero(fields.weightKg, 30, 250);
+    const daPeso = target != null && peso != null ? misureDaAltezzaPeso(target, peso, sessoFormula) : null;
+    if (daPeso) {
+      for (const name of ['bustCm', 'waistCm', 'hipsCm'] as const) {
+        if (manualFields.has(name)) continue;
+        fields[name].value = String(daPeso[name]);
+        autoFilledFields.add(name);
+        updateAutoLabel(name);
+      }
+      stimeDalPeso = true;
+      return;
+    }
+    // Peso tolto: senza una base dalla foto i numeri della formula non hanno più
+    // una fonte, e restare lì li farebbe passare per misure dell'acquirente.
+    if (stimeDalPeso && !autoBaseMeasures) {
+      for (const name of ['bustCm', 'waistCm', 'hipsCm'] as const) {
+        if (manualFields.has(name)) continue;
+        fields[name].value = '';
+        autoFilledFields.delete(name);
+        updateAutoLabel(name);
+      }
+    }
+    stimeDalPeso = false;
+
     if (!autoBaseMeasures) return;
-    const raw = fields.heightCm.value.trim();
-    const parsed = raw === '' ? NaN : parseFloat(normalizeDecimal(raw));
-    const target = !isNaN(parsed) && parsed >= 100 && parsed <= 220 ? parsed : null;
     const calibrated = calibrateCircumferences(autoBaseMeasures, referenceHeightCm, target);
     for (const name of ['bustCm', 'waistCm', 'hipsCm'] as const) {
       if (manualFields.has(name)) continue;
@@ -544,7 +642,7 @@ export function createMeasuresForm(
       // Da qui può partire una generazione a pagamento: `onConfirm` risolve il
       // capo della pagina (e attende l'analisi della categoria) prima di avviarla.
       // Spento nel frattempo, o un doppio click ne paga due.
-      await callbacks.onConfirm(values, measureSource);
+      await callbacks.onConfirm(values, measureSource, fit);
     } finally {
       submitting = false;
       // Il form di solito è già smontato (si passa a un altro step): riaccendere
@@ -582,6 +680,9 @@ export function createMeasuresForm(
           const aiMeasures = await callbacks.onRequestAiEstimate(dataUrl);
           if (!detectionMsg.isConnected) return;
           if (aiMeasures && Object.keys(aiMeasures).length > 0) {
+            // Prima del fill: il fill ricalcola, e col peso già scritto deve
+            // usare subito il sesso giusto.
+            if (!sesso && aiMeasures.sex) sessoFormula = aiMeasures.sex;
             fillFromMeasures(aiMeasures, 'vision');
             detectionMsg.textContent = strings.aiDetected;
             detectionMsg.style.color = '#16a34a';
