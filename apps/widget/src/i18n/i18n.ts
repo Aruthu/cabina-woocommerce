@@ -276,6 +276,17 @@ export function getLocaleStringOr(key: string, fallbackKey: string, vars?: Recor
   return value === key ? getLocaleString(fallbackKey, vars) : value;
 }
 
+/**
+ * Come `getLocaleString`, ma per una chiave **nuova** che il locale in cache
+ * può non avere ancora (vedi `getLocaleStringOr`): lì rende `fallback`, il
+ * testo inglese, invece del nome della chiave.
+ */
+export function getLocaleStringDefault(key: string, fallback: string, vars?: Record<string, string>): string {
+  const value = getLocaleString(key, vars);
+  if (value !== key) return value;
+  return vars ? fallback.replace(/\{\{(\w+)\}\}/g, (_, k: string) => vars[k] ?? `{{${k}}}`) : fallback;
+}
+
 export function getLocaleString(
   key: string,
   vars?: Record<string, string>,

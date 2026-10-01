@@ -4068,6 +4068,11 @@
     const value = getLocaleString(key, vars);
     return value === key ? getLocaleString(fallbackKey, vars) : value;
   }
+  function getLocaleStringDefault(key, fallback, vars) {
+    const value = getLocaleString(key, vars);
+    if (value !== key) return value;
+    return vars ? fallback.replace(/\{\{(\w+)\}\}/g, (_, k) => vars[k] ?? `{{${k}}}`) : fallback;
+  }
   function getLocaleString(key, vars) {
     if (!currentLocale) return key;
     const keys = key.split(".");
@@ -4203,7 +4208,257 @@
     const { name } = parseBrowser(navigator.userAgent);
     return BROWSER_UPDATE_URLS[name] ?? BROWSER_UPDATE_URLS.unknown;
   }
+  const FETCH_BLOB_TIMEOUT_MS = 15e3;
+  function extensionFromMime(mime) {
+    if (mime.includes("jpeg") || mime.includes("jpg")) return "jpg";
+    if (mime.includes("webp")) return "webp";
+    return "png";
+  }
+  async function fetchImageBlob(url) {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), FETCH_BLOB_TIMEOUT_MS);
+    try {
+      const res = await fetch(url, { signal: controller.signal });
+      if (!res.ok) throw new Error(`Download fallito: HTTP ${res.status}`);
+      return await res.blob();
+    } finally {
+      clearTimeout(timeoutId);
+    }
+  }
+  async function downloadImage(url, filenameBase) {
+    try {
+      const blob = await fetchImageBlob(url);
+      const objectUrl = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = objectUrl;
+      a.download = `${filenameBase}.${extensionFromMime(blob.type)}`;
+      a.style.display = "none";
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(() => {
+        document.body.removeChild(a);
+        URL.revokeObjectURL(objectUrl);
+      }, 100);
+    } catch {
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${filenameBase}.png`;
+      a.target = "_blank";
+      a.rel = "noopener noreferrer";
+      a.style.display = "none";
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(() => document.body.removeChild(a), 100);
+    }
+  }
+  async function shareImageFile(url, filenameBase) {
+    if (typeof navigator === "undefined" || !navigator.share) return "unsupported";
+    if (!navigator.canShare) return "unsupported";
+    try {
+      const blob = await fetchImageBlob(url);
+      const file = new File([blob], `${filenameBase}.${extensionFromMime(blob.type)}`, { type: blob.type || "image/png" });
+      if (!navigator.canShare({ files: [file] })) return "unsupported";
+      await navigator.share({ files: [file] });
+      return "shared";
+    } catch (e) {
+      if (e instanceof Error && e.name === "AbortError") return "cancelled";
+      return "unsupported";
+    }
+  }
+  function createResultActions(generatedUrl, resultId, strings, callbacks) {
+    const fragment = document.createDocumentFragment();
+    let currentUrl = generatedUrl;
+    let currentResultId = resultId;
+    const container = document.createElement("div");
+    container.setAttribute("data-cabina-result-actions", "");
+    container.style.cssText = [
+      "display:flex",
+      "gap:8px",
+      "justify-content:center",
+      "padding:12px",
+      "background:rgba(0,0,0,0.6)",
+      "backdrop-filter:blur(8px)",
+      "-webkit-backdrop-filter:blur(8px)",
+      "border-radius:8px"
+    ].join(";");
+    const filenameBase = `cabina-tryon-${Date.now()}`;
+    const saveBtn = document.createElement("button");
+    saveBtn.type = "button";
+    saveBtn.setAttribute("data-cabina-action-save", "");
+    saveBtn.textContent = strings.save;
+    saveBtn.style.cssText = buttonStyle$2();
+    saveBtn.addEventListener("click", async () => {
+      if (saveBtn.disabled) return;
+      saveBtn.disabled = true;
+      saveBtn.style.opacity = "0.6";
+      try {
+        await downloadImage(currentUrl, filenameBase);
+      } finally {
+        saveBtn.disabled = false;
+        saveBtn.style.opacity = "1";
+      }
+    });
+    container.appendChild(saveBtn);
+    const shareBtn = document.createElement("button");
+    shareBtn.type = "button";
+    shareBtn.setAttribute("data-cabina-action-share", "");
+    shareBtn.textContent = strings.share;
+    shareBtn.style.cssText = buttonStyle$2();
+    shareBtn.addEventListener("click", async () => {
+      if (shareBtn.disabled) return;
+      shareBtn.disabled = true;
+      shareBtn.style.opacity = "0.6";
+      try {
+        const outcome = await shareImageFile(currentUrl, filenameBase);
+        if (outcome === "unsupported") {
+          await downloadImage(currentUrl, filenameBase);
+        }
+      } finally {
+        shareBtn.disabled = false;
+        shareBtn.style.opacity = "1";
+      }
+    });
+    container.appendChild(shareBtn);
+    const reportBtn = document.createElement("button");
+    reportBtn.type = "button";
+    reportBtn.setAttribute("data-cabina-action-report", "");
+    reportBtn.textContent = strings.report;
+    reportBtn.style.cssText = buttonStyle$2();
+    reportBtn.addEventListener("click", () => {
+      if (reportBtn.disabled) return;
+      reportBtn.textContent = strings.reportConfirm;
+      reportBtn.disabled = true;
+      reportBtn.style.opacity = "0.6";
+      const { apiKey: apiKey2, baseUrl } = callbacks.getApiContext();
+      sendTryonReport(apiKey2, baseUrl, currentResultId);
+    });
+    container.appendChild(reportBtn);
+    fragment.appendChild(container);
+    return {
+      fragment,
+      updateResult: (url, newResultId) => {
+        currentUrl = url;
+        currentResultId = newResultId;
+      }
+    };
+  }
+  function buttonStyle$2(opzioni = {}) {
+    return [
+      "padding:8px 16px",
+      opzioni.primario ? "background:#fff" : "background:rgba(255,255,255,0.15)",
+      opzioni.primario ? "color:#111" : "color:#fff",
+      opzioni.primario ? "border:1px solid #fff" : "border:1px solid rgba(255,255,255,0.3)",
+      "border-radius:6px",
+      "font-size:13px",
+      opzioni.primario ? "font-weight:600" : "font-weight:500",
+      "cursor:pointer",
+      "transition:background 0.15s ease"
+    ].join(";");
+  }
+  function contestoAcquisto() {
+    const nostroPulsante = document.querySelector("[data-cabina-widget-btn]");
+    return nostroPulsante?.closest("form") ?? document;
+  }
+  function primoUtilizzabile(dentro) {
+    for (const selettore of ADD_TO_CART_SELECTORS) {
+      for (const nodo of Array.from(document.querySelectorAll(selettore))) {
+        const elemento = nodo;
+        if (dentro && dentro !== document && !dentro.contains(elemento)) continue;
+        if (elemento.matches(":disabled")) continue;
+        if (elemento.getAttribute("aria-disabled") === "true") continue;
+        return elemento;
+      }
+    }
+    return null;
+  }
+  function haControlloAcquisto(dentro) {
+    return ADD_TO_CART_SELECTORS.some(
+      (selettore) => Array.from(document.querySelectorAll(selettore)).some((nodo) => dentro.contains(nodo))
+    );
+  }
+  function trovaPulsanteAcquisto() {
+    const contesto = contestoAcquisto();
+    const utilizzabile = primoUtilizzabile(contesto);
+    if (utilizzabile) return utilizzabile;
+    if (contesto === document) return null;
+    if (haControlloAcquisto(contesto)) return null;
+    return primoUtilizzabile(null);
+  }
+  const ATTESA_MS = 8e3;
+  const PASSO_MS = 400;
+  function cartJsUrl() {
+    const shopify = window.Shopify;
+    if (!shopify) return null;
+    return `${shopify.routes?.root ?? "/"}cart.js`;
+  }
+  async function contaCarrello(url, variante) {
+    try {
+      const res = await fetch(url, { cache: "no-store", credentials: "same-origin", headers: { Accept: "application/json" } });
+      if (!res.ok) return null;
+      const cart = await res.json();
+      if (!Array.isArray(cart.items)) return null;
+      return cart.items.filter((riga2) => String(riga2.variant_id) === variante).reduce((somma, riga2) => somma + (typeof riga2.quantity === "number" ? riga2.quantity : 0), 0);
+    } catch {
+      return null;
+    }
+  }
+  async function attendiAumento(url, variante, prima) {
+    const fine = Date.now() + ATTESA_MS;
+    while (Date.now() < fine) {
+      await new Promise((r) => setTimeout(r, PASSO_MS));
+      const ora = await contaCarrello(url, variante);
+      if (ora != null && ora > prima) return true;
+    }
+    return false;
+  }
+  function createAddToCartButton(testi, callbacks) {
+    const pulsanteTema = trovaPulsanteAcquisto();
+    if (!pulsanteTema) return null;
+    const bottone = document.createElement("button");
+    bottone.type = "button";
+    bottone.setAttribute("data-cabina-action-cart", "");
+    bottone.setAttribute("aria-live", "polite");
+    bottone.textContent = testi.add;
+    bottone.style.cssText = buttonStyle$2({ primario: true });
+    let carrello = null;
+    const esito = (url, stato) => {
+      carrello = url.replace(/\.js$/, "");
+      bottone.disabled = false;
+      bottone.setAttribute("data-cabina-cart-state", stato);
+      bottone.textContent = stato === "added" ? testi.added : testi.failed;
+    };
+    bottone.addEventListener("click", async () => {
+      if (bottone.disabled) return;
+      if (carrello) {
+        window.location.assign(carrello);
+        return;
+      }
+      bottone.disabled = true;
+      const url = cartJsUrl();
+      if (!url) {
+        pulsanteTema.click();
+        callbacks.onAdded();
+        return;
+      }
+      bottone.textContent = testi.adding;
+      const variante = pulsanteTema.closest("form")?.querySelector('[name="id"]')?.value || null;
+      const prima = variante ? await contaCarrello(url, variante) : null;
+      if (!variante || prima == null) {
+        pulsanteTema.click();
+        callbacks.onAdded();
+        return;
+      }
+      pulsanteTema.click();
+      esito(url, await attendiAumento(url, variante, prima) ? "added" : "failed");
+    });
+    return bottone;
+  }
   function extractProductImageUrl() {
+    const variante = immagineVarianteScelta();
+    if (variante) {
+      const url = resolveUrl(variante);
+      if (url) return url;
+    }
     const ogImage = document.querySelector('meta[property="og:image"]');
     if (ogImage?.content) {
       const url = resolveUrl(ogImage.content);
@@ -4245,6 +4500,31 @@
   }
   function toHttps(url) {
     return url.startsWith("http://") ? `https://${url.slice("http://".length)}` : url;
+  }
+  let immaginiVarianti = null;
+  async function caricaImmaginiVarianti() {
+    immaginiVarianti = null;
+    if (!window.Shopify) return;
+    const percorso = window.location.pathname.replace(/\/+$/, "");
+    if (!/\/products\/[^/]+$/.test(percorso)) return;
+    try {
+      const res = await fetch(`${percorso}.js`, { credentials: "same-origin", headers: { Accept: "application/json" } });
+      if (!res.ok) return;
+      const prodotto = await res.json();
+      const mappa = /* @__PURE__ */ new Map();
+      for (const v of prodotto.variants ?? []) {
+        const src = v.featured_image?.src;
+        if (v.id != null && typeof src === "string" && src) mappa.set(String(v.id), src);
+      }
+      immaginiVarianti = mappa;
+    } catch {
+    }
+  }
+  function immagineVarianteScelta() {
+    if (!immaginiVarianti?.size) return null;
+    const form = trovaPulsanteAcquisto()?.closest("form");
+    const id = form?.querySelector('[name="id"]')?.value;
+    return id ? immaginiVarianti.get(id) ?? null : null;
   }
   const SUPPORTED_MIME_TYPES = [
     "image/jpeg",
@@ -4303,9 +4583,10 @@
   const PHOTO_JPEG_QUALITY = 0.85;
   const PHOTO_WEBP_QUALITY = 0.85;
   const DATA_URL_SAFE_LENGTH = 4e6;
-  function fitWithinMaxEdge(width, height, maxEdge = PHOTO_MAX_EDGE_PX) {
+  function fitWithinMaxEdge(width, height, maxEdge = PHOTO_MAX_EDGE_PX, enlarge = false) {
     const longest = Math.max(width, height);
-    if (longest <= maxEdge || longest <= 0) return { width, height };
+    if (longest <= 0 || longest === maxEdge) return { width, height };
+    if (longest < maxEdge && !enlarge) return { width, height };
     const scale = maxEdge / longest;
     return { width: Math.round(width * scale), height: Math.round(height * scale) };
   }
@@ -4326,11 +4607,11 @@
   function encodePhotoCanvas(canvas) {
     return supportsWebpEncode() ? canvas.toDataURL("image/webp", PHOTO_WEBP_QUALITY) : canvas.toDataURL("image/jpeg", PHOTO_JPEG_QUALITY);
   }
-  function downscalePhotoDataUrl(dataUrl, maxEdge = PHOTO_MAX_EDGE_PX) {
+  function downscalePhotoDataUrl(dataUrl, maxEdge = PHOTO_MAX_EDGE_PX, enlarge = false) {
     return new Promise((resolve, reject) => {
       const img = new Image();
       img.onload = () => {
-        const { width, height } = fitWithinMaxEdge(img.naturalWidth, img.naturalHeight, maxEdge);
+        const { width, height } = fitWithinMaxEdge(img.naturalWidth, img.naturalHeight, maxEdge, enlarge);
         try {
           const canvas = document.createElement("canvas");
           canvas.width = width;
@@ -4386,7 +4667,7 @@
     preview.setAttribute("data-cabina-photo-preview", "");
     preview.style.cssText = [
       "width:100%",
-      "height:200px",
+      "height:120px",
       "border:2px dashed #d1d5db",
       "border-radius:8px",
       "display:flex",
@@ -4451,7 +4732,7 @@
     const uploadBtn = document.createElement("button");
     uploadBtn.textContent = strings.uploadButton;
     uploadBtn.setAttribute("data-cabina-upload-btn", "");
-    uploadBtn.style.cssText = buttonStyle$2();
+    uploadBtn.style.cssText = buttonStyle$1();
     uploadBtn.addEventListener("click", () => {
       if (!consentCheckbox.checked) return;
       fileInput.click();
@@ -4526,8 +4807,8 @@
       }
       try {
         const dataUrl = await readFileAsDataUrl(file);
-        const downscaled = await downscalePhotoDataUrl(dataUrl);
-        const quality = await assessPhotoQuality(downscaled);
+        const quality = await assessPhotoQuality(await downscalePhotoDataUrl(dataUrl));
+        const downscaled = await downscalePhotoDataUrl(dataUrl, PHOTO_MAX_EDGE_PX, true);
         if (token !== selectionToken) return;
         currentDataUrl = downscaled;
         showPreview(downscaled);
@@ -4570,7 +4851,7 @@
       }
     }
   }
-  function buttonStyle$2() {
+  function buttonStyle$1() {
     return [
       "padding:8px 16px",
       "border:1px solid #d1d5db",
@@ -4878,13 +5159,13 @@
     const cancelBtn = document.createElement("button");
     cancelBtn.textContent = strings.cancel;
     cancelBtn.setAttribute("data-cabina-cancel-btn", "");
-    cancelBtn.style.cssText = buttonStyle$1("#f3f4f6", "#1a1a1a");
+    cancelBtn.style.cssText = buttonStyle("#f3f4f6", "#1a1a1a");
     cancelBtn.addEventListener("click", () => callbacks.onCancel());
     const confirmBtn = document.createElement("button");
     confirmBtn.textContent = strings.confirm;
     confirmBtn.setAttribute("data-cabina-confirm-btn", "");
     confirmBtn.disabled = true;
-    confirmBtn.style.cssText = buttonStyle$1("#1a1a1a", "#fff") + "opacity:0.5;";
+    confirmBtn.style.cssText = buttonStyle("#1a1a1a", "#fff") + "opacity:0.5;";
     confirmBtn.addEventListener("click", () => handleConfirm());
     buttonRow.appendChild(cancelBtn);
     buttonRow.appendChild(confirmBtn);
@@ -5094,7 +5375,7 @@
   function normalizeDecimal(value) {
     return value.replace(",", ".");
   }
-  function buttonStyle$1(bg, color) {
+  function buttonStyle(bg, color) {
     return [
       `background:${bg}`,
       `color:${color}`,
@@ -5117,7 +5398,7 @@
     }
   }
   const STORAGE_PREFIX = "cabina_photo_consent_";
-  const CURRENT_PHOTO_CONSENT_VERSION = 4;
+  const CURRENT_PHOTO_CONSENT_VERSION = 5;
   function getKey(apiKey2) {
     return `${STORAGE_PREFIX}${apiKey2}`;
   }
@@ -5184,15 +5465,16 @@
     };
   }
   const PRESET_MODELS = [
-    preset("female", "slim", "model_gallery.body_slim"),
-    preset("female", "regular", "model_gallery.body_regular"),
-    preset("female", "curvy", "model_gallery.body_curvy"),
-    preset("female", "plus", "model_gallery.body_plus"),
-    preset("male", "slim", "model_gallery.body_slim"),
-    preset("male", "regular", "model_gallery.body_regular"),
-    preset("male", "curvy", "model_gallery.body_curvy_male"),
-    preset("male", "plus", "model_gallery.body_plus")
+    preset("female", "slim", "model_gallery.body_slim", "26-35"),
+    preset("female", "regular", "model_gallery.body_regular", "26-35"),
+    preset("female", "curvy", "model_gallery.body_curvy", "26-35"),
+    preset("female", "plus", "model_gallery.body_plus", "26-35"),
+    preset("male", "slim", "model_gallery.body_slim", "26-35"),
+    preset("male", "regular", "model_gallery.body_regular", "26-35"),
+    preset("male", "curvy", "model_gallery.body_curvy_male", "26-35"),
+    preset("male", "plus", "model_gallery.body_plus", "26-35")
   ];
+  PRESET_MODELS.map((m) => `${m.gender}-${m.bodyType}`);
   const MORE_MODELS = PRESET_MODELS.flatMap(
     (base) => AGE_BANDS.map((band) => preset(base.gender, base.bodyType, base.labelKey, band))
   ).sort(
@@ -5201,7 +5483,7 @@
       a.gender.localeCompare(b.gender) || a.ageBand.localeCompare(b.ageBand)
     )
   );
-  const ALL_MODELS = [...PRESET_MODELS, ...MORE_MODELS];
+  const ALL_MODELS = MORE_MODELS;
   function ageBandLabel(band) {
     return band.replace("-", "–");
   }
@@ -5644,7 +5926,7 @@
     let container = null;
     let pointerStartX = 0;
     let isDragging = false;
-    const DRAG_THRESHOLD = 50;
+    const DRAG_THRESHOLD2 = 50;
     const activePointers = /* @__PURE__ */ new Set();
     const pointerLastX = /* @__PURE__ */ new Map();
     let pointerStartTime = 0;
@@ -5669,7 +5951,7 @@
       const deltaX = e.clientX - pointerStartX;
       const elapsedMs = Math.max(performance.now() - pointerStartTime, 1);
       const velocity = Math.abs(deltaX) / elapsedMs;
-      const isThresholdSwipe = Math.abs(deltaX) >= DRAG_THRESHOLD;
+      const isThresholdSwipe = Math.abs(deltaX) >= DRAG_THRESHOLD2;
       const isQuickSwipe = velocity >= VELOCITY_THRESHOLD_PX_MS && Math.abs(deltaX) >= MIN_VELOCITY_SWIPE_PX;
       if (isThresholdSwipe || isQuickSwipe) {
         const pos = indices.indexOf(currentAngle);
@@ -5724,9 +6006,18 @@
       getAngle: () => currentAngle
     };
   }
+  function limitiScorrimento(vista, fotoDa, fotoA, scala) {
+    if (scala * (fotoA - fotoDa) <= vista) {
+      const centro = vista / 2 - scala * (fotoDa + fotoA) / 2;
+      return [centro, centro];
+    }
+    return [vista - scala * fotoA, -scala * fotoDa];
+  }
   const MIN_SCALE = 1;
   const MAX_SCALE = 3;
   const ZOOM_SENSITIVITY = 1e-3;
+  const DOUBLE_TAP_SCALE = 2.5;
+  const DRAG_THRESHOLD = 4;
   const DOUBLE_TAP_DELAY = 300;
   function createZoomHandler(callbacks) {
     let container = null;
@@ -5740,46 +6031,64 @@
     let panStartTranslateX = 0;
     let panStartTranslateY = 0;
     let lastTapTime = 0;
+    let trascinato = false;
     function clampScale(scale) {
       return Math.max(MIN_SCALE, Math.min(MAX_SCALE, scale));
-    }
-    function clampPan(tx, ty, scale) {
-      const maxPan = Math.max(0, (scale - 1) * 100);
-      return {
-        tx: Math.max(-maxPan, Math.min(maxPan, tx)),
-        ty: Math.max(-maxPan, Math.min(maxPan, ty))
-      };
     }
     function updateTransform(partial) {
       currentTransform = { ...currentTransform, ...partial };
       if (partial.scale !== void 0) {
         currentTransform.scale = clampScale(currentTransform.scale);
       }
+      const m = callbacks.misure?.() ?? misureDelContenitore();
       if (currentTransform.scale <= 1.01) {
+        currentTransform.scale = 1;
         currentTransform.translateX = 0;
         currentTransform.translateY = 0;
-      } else if (partial.translateX !== void 0 || partial.translateY !== void 0) {
-        const clamped = clampPan(
-          currentTransform.translateX,
-          currentTransform.translateY,
-          currentTransform.scale
-        );
-        currentTransform.translateX = clamped.tx;
-        currentTransform.translateY = clamped.ty;
+      } else if (m) {
+        const s = currentTransform.scale;
+        const [x0, x1] = limitiScorrimento(m.larghezza, m.foto.x0, m.foto.x1, s);
+        const [y0, y1] = limitiScorrimento(m.altezza, m.foto.y0, m.foto.y1, s);
+        currentTransform.translateX = Math.max(x0, Math.min(x1, currentTransform.translateX));
+        currentTransform.translateY = Math.max(y0, Math.min(y1, currentTransform.translateY));
       }
       callbacks.onTransformChange({ ...currentTransform });
+    }
+    function misureDelContenitore() {
+      if (!container) return null;
+      const larghezza = container.clientWidth;
+      const altezza = container.clientHeight;
+      if (!larghezza || !altezza) return null;
+      return { larghezza, altezza, foto: { x0: 0, y0: 0, x1: larghezza, y1: altezza } };
+    }
+    function puntoNelContenitore(clientX, clientY) {
+      const r = container?.getBoundingClientRect();
+      return r ? { x: clientX - r.left, y: clientY - r.top } : { x: clientX, y: clientY };
+    }
+    function zoomVerso(nuovaScala, x, y) {
+      const s = currentTransform.scale;
+      const s2 = clampScale(nuovaScala);
+      const px = (x - currentTransform.translateX) / s;
+      const py = (y - currentTransform.translateY) / s;
+      updateTransform({ scale: s2, translateX: x - s2 * px, translateY: y - s2 * py });
     }
     function handleWheel(e) {
       e.preventDefault();
       const delta = -e.deltaY * ZOOM_SENSITIVITY;
-      const newScale = currentTransform.scale + delta;
-      updateTransform({ scale: newScale });
+      const { x, y } = puntoNelContenitore(e.clientX, e.clientY);
+      zoomVerso(currentTransform.scale + delta, x, y);
     }
     function getTouchDistance(touches) {
       if (touches.length < 2) return 0;
       const dx = touches[0].clientX - touches[1].clientX;
       const dy = touches[0].clientY - touches[1].clientY;
       return Math.sqrt(dx * dx + dy * dy);
+    }
+    function centroDelPinch(touches) {
+      return puntoNelContenitore(
+        (touches[0].clientX + touches[1].clientX) / 2,
+        (touches[0].clientY + touches[1].clientY) / 2
+      );
     }
     function handleTouchStart(e) {
       if (e.touches.length === 2) {
@@ -5799,17 +6108,16 @@
       if (isPinching && e.touches.length === 2) {
         const currentDist = getTouchDistance(e.touches);
         if (pinchStartDist > 0) {
-          const newScale = pinchStartScale * (currentDist / pinchStartDist);
-          updateTransform({ scale: newScale });
+          const { x, y } = centroDelPinch(e.touches);
+          zoomVerso(pinchStartScale * (currentDist / pinchStartDist), x, y);
         }
         e.preventDefault();
       } else if (isPanning && e.touches.length === 1 && currentTransform.scale > 1.01) {
-        const deltaX = e.touches[0].clientX - panStartX;
-        const deltaY = e.touches[0].clientY - panStartY;
         updateTransform({
-          translateX: panStartTranslateX + deltaX,
-          translateY: panStartTranslateY + deltaY
+          translateX: panStartTranslateX + (e.touches[0].clientX - panStartX),
+          translateY: panStartTranslateY + (e.touches[0].clientY - panStartY)
         });
+        e.preventDefault();
       }
     }
     function handleTouchEnd() {
@@ -5826,28 +6134,44 @@
       if (e.button !== 0) return;
       if (currentTransform.scale <= 1.01) return;
       pointerPanning = true;
+      trascinato = false;
       pointerStartX = e.clientX;
       pointerStartY = e.clientY;
       pointerStartTx = currentTransform.translateX;
       pointerStartTy = currentTransform.translateY;
       e.preventDefault();
+      try {
+        container?.setPointerCapture(e.pointerId);
+      } catch {
+      }
     }
     function handlePointerMove(e) {
       if (!pointerPanning) return;
       const deltaX = e.clientX - pointerStartX;
       const deltaY = e.clientY - pointerStartY;
-      updateTransform({
-        translateX: pointerStartTx + deltaX * (1 / currentTransform.scale),
-        translateY: pointerStartTy + deltaY * (1 / currentTransform.scale)
-      });
+      if (Math.abs(deltaX) > DRAG_THRESHOLD || Math.abs(deltaY) > DRAG_THRESHOLD) trascinato = true;
+      updateTransform({ translateX: pointerStartTx + deltaX, translateY: pointerStartTy + deltaY });
     }
     function handlePointerUp() {
       pointerPanning = false;
     }
+    function handleDragStart(e) {
+      e.preventDefault();
+    }
+    function handleClickCapture(e) {
+      if (!trascinato) return;
+      trascinato = false;
+      e.stopPropagation();
+    }
     function handleClick(e) {
       const now = Date.now();
       if (now - lastTapTime < DOUBLE_TAP_DELAY) {
-        updateTransform({ scale: 1, translateX: 0, translateY: 0 });
+        if (currentTransform.scale > 1.01) {
+          updateTransform({ scale: 1, translateX: 0, translateY: 0 });
+        } else {
+          const { x, y } = puntoNelContenitore(e.clientX, e.clientY);
+          zoomVerso(DOUBLE_TAP_SCALE, x, y);
+        }
       }
       lastTapTime = now;
     }
@@ -5863,7 +6187,11 @@
       el.addEventListener("pointermove", handlePointerMove);
       el.addEventListener("pointerup", handlePointerUp);
       el.addEventListener("pointercancel", handlePointerUp);
+      el.addEventListener("dragstart", handleDragStart);
+      el.style.userSelect = "none";
+      el.style.touchAction = "none";
       el.addEventListener("click", handleClick);
+      el.addEventListener("click", handleClickCapture, true);
     }
     function detach() {
       if (!container) return;
@@ -5876,7 +6204,9 @@
       container.removeEventListener("pointermove", handlePointerMove);
       container.removeEventListener("pointerup", handlePointerUp);
       container.removeEventListener("pointercancel", handlePointerUp);
+      container.removeEventListener("dragstart", handleDragStart);
       container.removeEventListener("click", handleClick);
+      container.removeEventListener("click", handleClickCapture, true);
       container = null;
       isPinching = false;
       isPanning = false;
@@ -5913,15 +6243,16 @@
   function sameSize(a, b) {
     return a.trim().toLowerCase() === b.trim().toLowerCase();
   }
-  function preselectSizeOnPage(size) {
-    if (!size.trim()) return false;
-    const radios = Array.from(
-      document.querySelectorAll('input[type="radio"]')
-    ).filter((el) => !isInsideWidget(el) && SIZE_OPTION_NAME.test(optionContext(el)));
-    const radio = radios.find((el) => sameSize(el.value, size));
+  function trovaTaglia(size) {
+    if (!size.trim()) return null;
+    const radio = Array.from(document.querySelectorAll('input[type="radio"]')).filter((el) => !isInsideWidget(el) && SIZE_OPTION_NAME.test(optionContext(el))).find((el) => sameSize(el.value, size));
     if (radio) {
-      if (!radio.checked) radio.click();
-      return true;
+      return {
+        scelta: () => radio.checked,
+        applica: () => {
+          if (!radio.checked) radio.click();
+        }
+      };
     }
     const selects = Array.from(document.querySelectorAll("select")).filter(
       (el) => !isInsideWidget(el) && SIZE_OPTION_NAME.test(optionContext(el))
@@ -5931,13 +6262,16 @@
         (o) => sameSize(o.value, size) || sameSize(o.textContent ?? "", size)
       );
       if (!option) continue;
-      if (select.value !== option.value) {
-        select.value = option.value;
-        select.dispatchEvent(new Event("change", { bubbles: true }));
-      }
-      return true;
+      return {
+        scelta: () => select.value === option.value,
+        applica: () => {
+          if (select.value === option.value) return;
+          select.value = option.value;
+          select.dispatchEvent(new Event("change", { bubbles: true }));
+        }
+      };
     }
-    return false;
+    return null;
   }
   const KEYBOARD_STEP_PERCENT = 5;
   const INITIAL_CLIP_PERCENT = 50;
@@ -6016,7 +6350,9 @@
       "box-shadow:0 0 8px rgba(0,0,0,0.4)",
       "cursor:ew-resize",
       "z-index:2",
-      "transform:translateX(-50%)"
+      // `--cabina-zoom` lo scrive la prova quando si zooma (27/09): la riga, il
+      // pomello e l'etichetta seguono il punto del confronto ma non si ingrandiscono.
+      "transform:translateX(-50%) scaleX(calc(1 / var(--cabina-zoom, 1)))"
     ].join(";");
     const knob = document.createElement("div");
     knob.setAttribute("data-cabina-reveal-knob", "");
@@ -6025,7 +6361,8 @@
       "position:absolute",
       "top:50%",
       "left:50%",
-      "transform:translate(-50%,-50%)",
+      // Solo in verticale: in orizzontale lo compensa già la riga, che lo contiene.
+      "transform:translate(-50%,-50%) scaleY(calc(1 / var(--cabina-zoom, 1)))",
       // ⚠️ 2026-08-20 (Arou) — da 36px a 48. A 36 il pomello si perdeva sulla
       // foto, e chi non lo nota vede meta risultato e se ne va senza aver capito
       // che c'era un confronto da trascinare. Dentro il riquadro del tema la
@@ -6067,7 +6404,8 @@
       "position:absolute",
       "left:50%",
       "top:16px",
-      "transform:translateX(-50%)",
+      "transform:translateX(-50%) scale(calc(1 / var(--cabina-zoom, 1)))",
+      "transform-origin:top center",
       "padding:6px 12px",
       "border-radius:999px",
       "background:rgba(0,0,0,0.6)",
@@ -6236,198 +6574,6 @@
     container.appendChild(row);
     fragment.appendChild(container);
     return fragment;
-  }
-  const FETCH_BLOB_TIMEOUT_MS = 15e3;
-  function extensionFromMime(mime) {
-    if (mime.includes("jpeg") || mime.includes("jpg")) return "jpg";
-    if (mime.includes("webp")) return "webp";
-    return "png";
-  }
-  async function fetchImageBlob(url) {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), FETCH_BLOB_TIMEOUT_MS);
-    try {
-      const res = await fetch(url, { signal: controller.signal });
-      if (!res.ok) throw new Error(`Download fallito: HTTP ${res.status}`);
-      return await res.blob();
-    } finally {
-      clearTimeout(timeoutId);
-    }
-  }
-  async function downloadImage(url, filenameBase) {
-    try {
-      const blob = await fetchImageBlob(url);
-      const objectUrl = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = objectUrl;
-      a.download = `${filenameBase}.${extensionFromMime(blob.type)}`;
-      a.style.display = "none";
-      document.body.appendChild(a);
-      a.click();
-      setTimeout(() => {
-        document.body.removeChild(a);
-        URL.revokeObjectURL(objectUrl);
-      }, 100);
-    } catch {
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `${filenameBase}.png`;
-      a.target = "_blank";
-      a.rel = "noopener noreferrer";
-      a.style.display = "none";
-      document.body.appendChild(a);
-      a.click();
-      setTimeout(() => document.body.removeChild(a), 100);
-    }
-  }
-  async function shareImageFile(url, filenameBase) {
-    if (typeof navigator === "undefined" || !navigator.share) return "unsupported";
-    if (!navigator.canShare) return "unsupported";
-    try {
-      const blob = await fetchImageBlob(url);
-      const file = new File([blob], `${filenameBase}.${extensionFromMime(blob.type)}`, { type: blob.type || "image/png" });
-      if (!navigator.canShare({ files: [file] })) return "unsupported";
-      await navigator.share({ files: [file] });
-      return "shared";
-    } catch (e) {
-      if (e instanceof Error && e.name === "AbortError") return "cancelled";
-      return "unsupported";
-    }
-  }
-  function createResultActions(generatedUrl, resultId, strings, callbacks) {
-    const fragment = document.createDocumentFragment();
-    let currentUrl = generatedUrl;
-    let currentResultId = resultId;
-    const container = document.createElement("div");
-    container.setAttribute("data-cabina-result-actions", "");
-    container.style.cssText = [
-      "display:flex",
-      "gap:8px",
-      "justify-content:center",
-      "padding:12px",
-      "background:rgba(0,0,0,0.6)",
-      "backdrop-filter:blur(8px)",
-      "-webkit-backdrop-filter:blur(8px)",
-      "border-radius:8px"
-    ].join(";");
-    const filenameBase = `cabina-tryon-${Date.now()}`;
-    const saveBtn = document.createElement("button");
-    saveBtn.type = "button";
-    saveBtn.setAttribute("data-cabina-action-save", "");
-    saveBtn.textContent = strings.save;
-    saveBtn.style.cssText = buttonStyle();
-    saveBtn.addEventListener("click", async () => {
-      if (saveBtn.disabled) return;
-      saveBtn.disabled = true;
-      saveBtn.style.opacity = "0.6";
-      try {
-        await downloadImage(currentUrl, filenameBase);
-      } finally {
-        saveBtn.disabled = false;
-        saveBtn.style.opacity = "1";
-      }
-    });
-    container.appendChild(saveBtn);
-    const shareBtn = document.createElement("button");
-    shareBtn.type = "button";
-    shareBtn.setAttribute("data-cabina-action-share", "");
-    shareBtn.textContent = strings.share;
-    shareBtn.style.cssText = buttonStyle();
-    shareBtn.addEventListener("click", async () => {
-      if (shareBtn.disabled) return;
-      shareBtn.disabled = true;
-      shareBtn.style.opacity = "0.6";
-      try {
-        const outcome = await shareImageFile(currentUrl, filenameBase);
-        if (outcome === "unsupported") {
-          await downloadImage(currentUrl, filenameBase);
-        }
-      } finally {
-        shareBtn.disabled = false;
-        shareBtn.style.opacity = "1";
-      }
-    });
-    container.appendChild(shareBtn);
-    const reportBtn = document.createElement("button");
-    reportBtn.type = "button";
-    reportBtn.setAttribute("data-cabina-action-report", "");
-    reportBtn.textContent = strings.report;
-    reportBtn.style.cssText = buttonStyle();
-    reportBtn.addEventListener("click", () => {
-      if (reportBtn.disabled) return;
-      reportBtn.textContent = strings.reportConfirm;
-      reportBtn.disabled = true;
-      reportBtn.style.opacity = "0.6";
-      const { apiKey: apiKey2, baseUrl } = callbacks.getApiContext();
-      sendTryonReport(apiKey2, baseUrl, currentResultId);
-    });
-    container.appendChild(reportBtn);
-    fragment.appendChild(container);
-    return {
-      fragment,
-      updateResult: (url, newResultId) => {
-        currentUrl = url;
-        currentResultId = newResultId;
-      }
-    };
-  }
-  function buttonStyle(opzioni = {}) {
-    return [
-      "padding:8px 16px",
-      opzioni.primario ? "background:#fff" : "background:rgba(255,255,255,0.15)",
-      opzioni.primario ? "color:#111" : "color:#fff",
-      opzioni.primario ? "border:1px solid #fff" : "border:1px solid rgba(255,255,255,0.3)",
-      "border-radius:6px",
-      "font-size:13px",
-      opzioni.primario ? "font-weight:600" : "font-weight:500",
-      "cursor:pointer",
-      "transition:background 0.15s ease"
-    ].join(";");
-  }
-  function contestoAcquisto() {
-    const nostroPulsante = document.querySelector("[data-cabina-widget-btn]");
-    return nostroPulsante?.closest("form") ?? document;
-  }
-  function primoUtilizzabile(dentro) {
-    for (const selettore of ADD_TO_CART_SELECTORS) {
-      for (const nodo of Array.from(document.querySelectorAll(selettore))) {
-        const elemento = nodo;
-        if (dentro && dentro !== document && !dentro.contains(elemento)) continue;
-        if (elemento.matches(":disabled")) continue;
-        if (elemento.getAttribute("aria-disabled") === "true") continue;
-        return elemento;
-      }
-    }
-    return null;
-  }
-  function haControlloAcquisto(dentro) {
-    return ADD_TO_CART_SELECTORS.some(
-      (selettore) => Array.from(document.querySelectorAll(selettore)).some((nodo) => dentro.contains(nodo))
-    );
-  }
-  function trovaPulsanteAcquisto() {
-    const contesto = contestoAcquisto();
-    const utilizzabile = primoUtilizzabile(contesto);
-    if (utilizzabile) return utilizzabile;
-    if (contesto === document) return null;
-    if (haControlloAcquisto(contesto)) return null;
-    return primoUtilizzabile(null);
-  }
-  function createAddToCartButton(etichetta, callbacks) {
-    const pulsanteTema = trovaPulsanteAcquisto();
-    if (!pulsanteTema) return null;
-    const bottone = document.createElement("button");
-    bottone.type = "button";
-    bottone.setAttribute("data-cabina-action-cart", "");
-    bottone.textContent = etichetta;
-    bottone.style.cssText = buttonStyle({ primario: true });
-    bottone.addEventListener("click", () => {
-      if (bottone.disabled) return;
-      bottone.disabled = true;
-      pulsanteTema.click();
-      callbacks.onAdded();
-    });
-    return bottone;
   }
   const REGOLE = [
     ["footwear", /\b(shoes?|sneakers?|trainers?|boots?|loafers?|flats|heels?|pumps?|sandals?|mules?|espadrilles?|slippers?|moccasins?|brogues?|scarp[ae]|stival[ei]|stivalett[io]|sandal[oi]|mocassin[oi]|d[ée]collet[ée]|ballerin[ae]|chaussures?|baskets?|bottes?|bottines?|sandales?|escarpins?|zapat(o|os|illa|illas)|botas?|sandalias?|schuhe?|stiefel|sandalen?|turnschuhe?)\b/i],
@@ -6635,6 +6781,9 @@
   let zoomHandler = null;
   let imageElements = [];
   let sizeBadgeElement = null;
+  let bottomBarElement = null;
+  let barraObserver = null;
+  const SPAZIO_BARRA = 10;
   let showSizeScore = false;
   function setShowSizeScore(value) {
     showSizeScore = value;
@@ -6690,6 +6839,7 @@
     return overlay.getAttribute("data-cabina-tryon-inline") === "";
   }
   const SCORE_COLOR = "#4ade80";
+  const NERO_INLINE = "rgb(31,31,31)";
   function buildScoreSpan(score) {
     const el = document.createElement("span");
     el.style.cssText = `font-size:18px;font-weight:500;color:${SCORE_COLOR};margin-left:8px;`;
@@ -6697,16 +6847,14 @@
     return el;
   }
   function buildSizeBadge(recommendation, inline = false) {
-    {
-      preselectSizeOnPage(recommendation.size);
-    }
     const badge = document.createElement("div");
     badge.setAttribute("data-cabina-size-badge", "");
     badge.style.cssText = [
       // ⚠️ 2026-08-13 (Arou) — il badge torna visibile: tolto il `display:none`
       // che lo nascondeva dal 10/08, e con lui torna la preselezione sulla
       // pagina prodotto (qui sopra). Le due cose si muovono insieme: i due
-      // commenti si citano a vicenda perché nessuno ne muova metà.
+      // commenti si citano a vicenda perché nessuno ne muova metà. Dal
+      // 2026-09-23 la preselezione è il pulsante «Scegli» dentro questo badge.
       //
       // Sta dentro `buildSizeBadge` e non ai chiamanti perché questa è la fonte
       // unica dei due percorsi — creazione dell'overlay e `updateSizeBadge` — e
@@ -6728,7 +6876,7 @@
       // sola opacità avrebbe reso il badge illeggibile sulle foto chiare.
       // Inline il fondale non è più un'immagine ma la pagina del negozio: il
       // nero pieno regge da sé, la sfocatura non ha nulla da appiattire.
-      inline ? "background:rgb(31,31,31)" : "background:rgba(0,0,0,0.45)",
+      inline ? `background:${NERO_INLINE}` : "background:rgba(0,0,0,0.45)",
       "color:#fff",
       "padding:14px 22px",
       "border-radius:10px",
@@ -6747,7 +6895,7 @@
     const sizeLine = document.createElement("div");
     sizeLine.style.cssText = "display:flex;align-items:baseline;justify-content:center;gap:0;";
     const sizeText = document.createElement("span");
-    sizeText.style.cssText = "font-size:26px;font-weight:700;";
+    sizeText.style.cssText = `font-size:26px;font-weight:700;color:${SCORE_COLOR};`;
     sizeText.textContent = recommendation.size;
     sizeLine.appendChild(sizeText);
     if (showSizeScore) sizeLine.appendChild(buildScoreSpan(recommendation.score));
@@ -6773,14 +6921,54 @@
       comfort.textContent = getLocaleString("size.comfort_hint", { size: recommendation.comfortSize });
       badge.appendChild(comfort);
     }
+    const scelta = buildSizeChoice(recommendation.size);
+    if (scelta) badge.appendChild(scelta);
     return badge;
+  }
+  function buildSizeChoice(size) {
+    const controllo = trovaTaglia(size);
+    if (!controllo) return null;
+    const bottone = document.createElement("button");
+    bottone.type = "button";
+    bottone.setAttribute("data-cabina-size-choose", "");
+    bottone.setAttribute("aria-live", "polite");
+    bottone.style.cssText = [
+      "display:block",
+      "margin:10px auto 0",
+      "padding:8px 16px",
+      "border:1px solid rgba(255,255,255,0.85)",
+      "border-radius:8px",
+      "background:transparent",
+      "color:#fff",
+      "font:inherit",
+      "font-size:14px",
+      "font-weight:600",
+      "cursor:pointer"
+    ].join(";");
+    const confermata = () => {
+      bottone.textContent = getLocaleStringDefault("size.chosen", "{{size}} selected ✓", { size });
+      bottone.disabled = true;
+      bottone.style.cursor = "default";
+      bottone.style.opacity = "0.85";
+    };
+    if (controllo.scelta()) {
+      confermata();
+    } else {
+      bottone.textContent = getLocaleStringDefault("size.choose", "Choose {{size}}", { size });
+      bottone.addEventListener("click", () => {
+        controllo.applica();
+        confermata();
+      });
+    }
+    return bottone;
   }
   function mountSizeBadge(overlay, recommendation, imageContainerRef) {
     const inline = isInline(overlay);
     const themeHost = inline ? document.querySelector(`[${SIZE_HOST_ATTR}]`) ?? creaSizeHostSottoIlPulsante() : null;
     const imageContainer = imageContainerRef ?? overlay.querySelector("[data-cabina-tryon-image-container]");
     const badge = buildSizeBadge(recommendation, themeHost != null);
-    (themeHost ?? imageContainer ?? overlay).appendChild(badge);
+    const barra = themeHost?.querySelector("[data-cabina-tryon-bottom-bar]") ?? null;
+    (themeHost ?? imageContainer ?? overlay).insertBefore(badge, barra);
     sizeBadgeElement = badge;
     return badge;
   }
@@ -6788,6 +6976,7 @@
     sizeBadgeElement?.remove();
     sizeBadgeElement = null;
   }
+  const RAPPORTO_MIN_INGRANDITA = 3 / 4;
   function showTryOnOverlay(renderResults, onClose, onAngleChange, sizeRecommendation, photoData, catalog, resultId, apiContext, onBack, outfit) {
     removeTryOnOverlay();
     const stage = findStage();
@@ -6816,7 +7005,11 @@
         // negozio compete con la prova. La separazione la fa l'ombra del riquadro,
         // non il buio del fondale — per questo sotto è stata rinforzata.
         "background:rgba(0,0,0,0.55)",
-        "z-index:2147483645"
+        "z-index:2147483645",
+        // 24/09: la barra delle azioni sta SOTTO il riquadro, in flusso
+        // (vedi `bottomBar`): colonna, così non copre nulla.
+        "flex-direction:column",
+        `gap:${SPAZIO_BARRA}px`
       ],
       "display:flex",
       "align-items:center",
@@ -6837,8 +7030,7 @@
       // avanzava — in pratica i piedi, che per una prova di scarpe sono tutto
       // (Arou, 2026-08-20).
       ...inline ? ["width:100%", "height:100%", "max-width:100%", "max-height:100%", "border-radius:inherit"] : ["max-width:90vw", "max-height:90vh", "border-radius:12px", "box-shadow:0 12px 48px rgba(0,0,0,0.55)"],
-      "overflow:hidden",
-      "transition:transform 0.08s ease-out"
+      "overflow:hidden"
     ].join(";");
     const imagesWrapper = document.createElement("div");
     imagesWrapper.setAttribute("data-cabina-tryon-images", "");
@@ -6860,11 +7052,7 @@
       bottomBar = document.createElement("div");
       bottomBar.setAttribute("data-cabina-tryon-bottom-bar", "");
       bottomBar.style.cssText = [
-        "position:absolute",
-        "bottom:80px",
-        "left:0",
-        "right:0",
-        "z-index:3",
+        ...inline ? ["width:100%"] : ["flex:none", "box-sizing:border-box"],
         "display:flex",
         "flex-direction:column",
         "gap:8px",
@@ -6932,12 +7120,19 @@
         );
         bottomBar.appendChild(selectStyleUI);
       }
-      const addToCart = createAddToCartButton(getLocaleString("reveal_result.add_to_cart"), {
-        // La stessa uscita del pulsante ✕: dopo l'aggiunta l'acquirente deve
-        // vedere il carrello del negozio — spesso un drawer che si apre da solo —
-        // non restare davanti alla propria foto.
-        onAdded: onClose
-      });
+      const addToCart = createAddToCartButton(
+        {
+          add: getLocaleString("reveal_result.add_to_cart"),
+          adding: getLocaleStringDefault("reveal_result.adding_to_cart", "Adding…"),
+          added: getLocaleStringDefault("reveal_result.added_to_cart", "Added to cart ✓ · View cart"),
+          failed: getLocaleStringDefault("reveal_result.add_to_cart_failed", "Not confirmed · Check your cart")
+        },
+        {
+          // Fuori da Shopify l'esito non si legge: la stessa uscita del pulsante
+          // ✕, e il riscontro è il drawer o la pagina del carrello del tema.
+          onAdded: onClose
+        }
+      );
       if (addToCart) bottomBar.appendChild(addToCart);
       resultActions = createResultActions(
         renderResults[0],
@@ -6953,6 +7148,14 @@
         }
       );
       bottomBar.appendChild(resultActions.fragment);
+      if (inline) {
+        const azioni = bottomBar.querySelector("[data-cabina-result-actions]");
+        if (azioni) {
+          azioni.style.background = NERO_INLINE;
+          azioni.style.backdropFilter = "";
+          azioni.style.setProperty("-webkit-backdrop-filter", "");
+        }
+      }
     }
     const sizer = document.createElement("img");
     sizer.setAttribute("data-cabina-tryon-sizer", "");
@@ -7033,9 +7236,32 @@
       );
       rotationHandler.attach(overlay);
     }
+    imagesWrapper.style.transformOrigin = "0 0";
+    imagesWrapper.style.transition = "transform 0.08s ease-out";
     zoomHandler = createZoomHandler({
       onTransformChange: (transform) => {
-        imageContainer.style.transform = `scale(${transform.scale}) translate(${transform.translateX}px, ${transform.translateY}px)`;
+        imagesWrapper.style.transform = `translate(${transform.translateX}px, ${transform.translateY}px) scale(${transform.scale})`;
+        imagesWrapper.style.setProperty("--cabina-zoom", String(transform.scale));
+      },
+      // Misure di layout (client*, che la trasformazione non tocca) e rettangolo
+      // della foto dentro il contenitore: `object-fit: contain` la centra e
+      // lascia bande dove le proporzioni non coincidono. Si misura lo STESSO
+      // elemento a cui è agganciato lo zoom e contro cui si legge il puntatore
+      // (`imageContainer`): inline e ingrandito il wrapper lo riempie al 100%,
+      // ma un solo riferimento non lascia il dubbio (rilievo Kilo sulla #268).
+      misure: () => {
+        const larghezza = imageContainer.clientWidth;
+        const altezza = imageContainer.clientHeight;
+        const img = [...imagesWrapper.querySelectorAll("img")].find((i) => i.naturalWidth > 0);
+        if (!larghezza || !altezza || !img) return null;
+        const k = Math.min(larghezza / img.naturalWidth, altezza / img.naturalHeight);
+        const w = img.naturalWidth * k;
+        const h = img.naturalHeight * k;
+        return {
+          larghezza,
+          altezza,
+          foto: { x0: (larghezza - w) / 2, y0: (altezza - h) / 2, x1: (larghezza + w) / 2, y1: (altezza + h) / 2 }
+        };
       }
     });
     zoomHandler.attach(imageContainer);
@@ -7075,6 +7301,70 @@
       onClose();
     });
     imageContainer.appendChild(closeButton);
+    let ingrandita = false;
+    const stileOverlayInline = overlay.style.cssText;
+    const stileRiquadroInline = imageContainer.style.cssText;
+    const misuraIngrandita = () => {
+      const img = imagesWrapper.querySelector("img");
+      const foto = img && img.naturalWidth ? img.naturalWidth / img.naturalHeight : 1360 / 2048;
+      const r = Math.max(foto, RAPPORTO_MIN_INGRANDITA);
+      const h = Math.min(window.innerHeight * 0.9, window.innerWidth * 0.9 / r);
+      imageContainer.style.width = `${Math.round(h * r)}px`;
+      imageContainer.style.height = `${Math.round(h)}px`;
+    };
+    const escIngrandita = (e) => {
+      if (e.key !== "Escape") return;
+      e.stopPropagation();
+      impostaIngrandita(false);
+    };
+    const fondaleIngrandita = (e) => {
+      if (e.target === overlay) impostaIngrandita(false);
+    };
+    const ingrandisci = document.createElement("button");
+    function impostaIngrandita(si) {
+      if (!stage || si === ingrandita) return;
+      ingrandita = si;
+      zoomHandler?.reset();
+      if (si) {
+        overlay.style.cssText = `${stileOverlayInline};position:fixed;inset:0;z-index:2147483645;background:rgba(0,0,0,0.55);align-items:center;justify-content:center`;
+        imageContainer.style.cssText = `${stileRiquadroInline};max-width:none;max-height:none;border-radius:12px;box-shadow:0 12px 48px rgba(0,0,0,0.55);background:#1a1a1a`;
+        misuraIngrandita();
+        document.body.appendChild(overlay);
+        window.addEventListener("resize", misuraIngrandita);
+        document.addEventListener("keydown", escIngrandita, true);
+        overlay.addEventListener("click", fondaleIngrandita);
+      } else {
+        overlay.style.cssText = stileOverlayInline;
+        imageContainer.style.cssText = stileRiquadroInline;
+        stage.appendChild(overlay);
+        window.removeEventListener("resize", misuraIngrandita);
+        document.removeEventListener("keydown", escIngrandita, true);
+        overlay.removeEventListener("click", fondaleIngrandita);
+      }
+      ingrandisci.textContent = si ? "⤡" : "⤢";
+      const etichetta = si ? getLocaleStringDefault("tryon.shrink", "Back to the page") : getLocaleStringDefault("tryon.enlarge", "Enlarge");
+      ingrandisci.setAttribute("aria-label", etichetta);
+      ingrandisci.title = etichetta;
+    }
+    if (stage) {
+      ingrandisci.setAttribute("data-cabina-tryon-enlarge", "");
+      ingrandisci.textContent = "⤢";
+      const etichetta = getLocaleStringDefault("tryon.enlarge", "Enlarge");
+      ingrandisci.setAttribute("aria-label", etichetta);
+      ingrandisci.title = etichetta;
+      ingrandisci.style.cssText = closeButton.style.cssText;
+      ingrandisci.style.top = "auto";
+      ingrandisci.style.bottom = "12px";
+      ingrandisci.addEventListener("click", (e) => {
+        e.stopPropagation();
+        impostaIngrandita(!ingrandita);
+      });
+      imageContainer.appendChild(ingrandisci);
+      overlay.__esciIngrandita = () => {
+        window.removeEventListener("resize", misuraIngrandita);
+        document.removeEventListener("keydown", escIngrandita, true);
+      };
+    }
     if (onBack) {
       const backButton = document.createElement("button");
       backButton.setAttribute("data-cabina-tryon-back", "");
@@ -7132,8 +7422,27 @@
     document.addEventListener("keydown", escHandler);
     overlay.__escHandler = escHandler;
     overlay.appendChild(imageContainer);
-    if (bottomBar) overlay.appendChild(bottomBar);
     (stage ?? document.body).appendChild(overlay);
+    if (bottomBar) {
+      const slot = inline ? document.querySelector(`[${SIZE_HOST_ATTR}]`) ?? creaSizeHostSottoIlPulsante() : null;
+      (slot ?? overlay).appendChild(bottomBar);
+      bottomBarElement = bottomBar;
+      if (!inline && typeof ResizeObserver !== "undefined") {
+        const barra = bottomBar;
+        barraObserver = new ResizeObserver(() => {
+          const maxH = Math.max(120, overlay.clientHeight * 0.9 - barra.offsetHeight - SPAZIO_BARRA);
+          overlay.querySelectorAll(
+            "[data-cabina-tryon-image-container],[data-cabina-tryon-sizer],[data-cabina-tryon-image]"
+          ).forEach((el) => {
+            el.style.maxHeight = `${maxH}px`;
+          });
+          if (imageContainer.offsetWidth) barra.style.width = `${imageContainer.offsetWidth}px`;
+        });
+        barraObserver.observe(overlay);
+        barraObserver.observe(bottomBar);
+        barraObserver.observe(imageContainer);
+      }
+    }
     if (!document.getElementById("cabina-tryon-styles")) {
       const style = document.createElement("style");
       style.id = "cabina-tryon-styles";
@@ -7160,6 +7469,7 @@
       if (handler) {
         document.removeEventListener("keydown", handler);
       }
+      overlayElement.__esciIngrandita?.();
       if (rotationHandler) {
         rotationHandler.detach();
         rotationHandler = null;
@@ -7169,6 +7479,10 @@
         zoomHandler = null;
       }
       removeSizeBadge();
+      bottomBarElement?.remove();
+      bottomBarElement = null;
+      barraObserver?.disconnect();
+      barraObserver = null;
       overlayElement.remove();
       overlayElement = null;
       imageElements = [];
@@ -8339,6 +8653,7 @@
     document.querySelector("[data-cabina-widget-btn]")?.click();
   }
   function startGarmentAnalysis(apiKey2, baseUrl) {
+    void caricaImmaginiVarianti();
     garmentAnalysis = null;
     const productUrl = extractProductImageUrl();
     if (!productUrl) {

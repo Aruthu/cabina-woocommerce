@@ -19,7 +19,7 @@
     "quality_optimal": "Sangat baik",
     "quality_sufficient": "Cukup",
     "quality_low": "Rendah",
-    "consent_text": "Saya setuju foto saya dikirim ke layanan kecerdasan buatan eksternal — PrunaAI (Amerika Serikat) untuk membuat hasil coba, dan Novita AI (Amerika Serikat) untuk memperkirakan ukuran dan memeriksa bahwa pakaian pada hasil adalah yang asli — dan saya menerima {termini} serta {privacy}.",
+    "consent_text": "Saya setuju foto saya dikirim ke layanan kecerdasan buatan eksternal — PrunaAI (Amerika Serikat) untuk membuat hasil coba, dan Vercel AI Gateway (Amerika Serikat; model OpenAI yang dijalankan di Microsoft Azure) untuk memperkirakan ukuran dan memeriksa bahwa pakaian pada hasil adalah yang asli — dan saya menerima {termini} serta {privacy}. Saya menyatakan bahwa saya berusia minimal 18 tahun.",
     "consent_terms_label": "Syarat dan ketentuan",
     "consent_privacy_label": "Kebijakan privasi",
     "consent_required": "Terima syarat dan ketentuan serta kebijakan privasi untuk mengunggah foto Anda"
@@ -61,7 +61,9 @@
   },
   "tryon": {
     "close": "Tutup",
-    "rotate_hint": "Seret untuk memutar"
+    "rotate_hint": "Seret untuk memutar",
+    "enlarge": "Perbesar",
+    "shrink": "Kembali ke halaman"
   },
   "size": {
     "recommended": "Ukuran yang disarankan",
@@ -70,7 +72,9 @@
     "between": "Di antara {{size1}} dan {{size2}} — kami sarankan {{recommended}} agar lebih nyaman",
     "confidence_score": "Keandalan {{score}}%",
     "between_smaller": "Di antara {{size1}} dan {{size2}} — kami sarankan {{recommended}}",
-    "comfort_hint": "Lebih longgar: {{size}} · silakan pilih ukuran yang menurut Anda pas"
+    "comfort_hint": "Lebih longgar: {{size}} · silakan pilih ukuran yang menurut Anda pas",
+    "choose": "Pilih {{size}}",
+    "chosen": "{{size}} dipilih ✓"
   },
   "browser": {
     "unsupported_title": "Perbarui peramban Anda untuk menggunakan Cabina",
@@ -121,6 +125,9 @@
     "outfit_label": "Lengkapi tampilan",
     "outfit_try": "Coba bersama",
     "outfit_loading": "Menyiapkan tampilan…",
-    "outfit_error": "Tampilan gagal dibuat, silakan coba lagi"
+    "outfit_error": "Tampilan gagal dibuat, silakan coba lagi",
+    "adding_to_cart": "Menambahkan…",
+    "added_to_cart": "Ditambahkan ke keranjang ✓ · Lihat keranjang",
+    "add_to_cart_failed": "Belum dikonfirmasi · Cek keranjang"
   }
 }

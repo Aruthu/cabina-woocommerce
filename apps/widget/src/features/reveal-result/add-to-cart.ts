@@ -135,9 +135,72 @@ export function trovaPulsanteAcquisto(): HTMLElement | null {
 }
 
 export interface AddToCartCallbacks {
-  /** Chiude la cabina: dopo l'aggiunta l'acquirente deve vedere il suo carrello,
-   *  non restare davanti alla propria foto. */
+  /** Chiude la cabina. Solo dove l'esito non si può leggere (fuori da Shopify):
+   *  lì il tema apre il suo carrello o ricarica la pagina, ed è quello il
+   *  riscontro. */
   onAdded: () => void;
+}
+
+/** I testi del pulsante nei suoi stati. */
+export interface AddToCartLabels {
+  add: string;
+  adding: string;
+  /** Riuscito; il pulsante porta poi al carrello. */
+  added: string;
+  /** Non confermato entro l'attesa; anche questo porta al carrello. */
+  failed: string;
+}
+
+/** Quanto si aspetta che il carrello cambi dopo il clic sul pulsante del tema. */
+const ATTESA_MS = 8000;
+const PASSO_MS = 400;
+
+/**
+ * L'URL di `cart.js`, o null fuori da Shopify.
+ *
+ * `Shopify.routes.root` porta il prefisso della lingua o del mercato (`/it/`):
+ * un `/cart.js` fisso funziona lo stesso, ma su un mercato con dominio suo
+ * lascerebbe la sessione del carrello sbagliata.
+ */
+function cartJsUrl(): string | null {
+  const shopify = (window as unknown as { Shopify?: { routes?: { root?: string } } }).Shopify;
+  if (!shopify) return null;
+  return `${shopify.routes?.root ?? '/'}cart.js`;
+}
+
+/**
+ * Quanti pezzi della variante `variante` ci sono nel carrello (tutte le righe);
+ * null se `cart.js` non si legge o non elenca le righe.
+ *
+ * La variante e mai il totale (review #244): un altro prodotto aggiunto nel
+ * frattempo, da un'altra scheda o dal drawer, farebbe dire «Aggiunto» per un
+ * capo che nel carrello non c'è. Senza `items` non si ripiega su `item_count`,
+ * per la stessa ragione: il carrello conta come illeggibile.
+ */
+async function contaCarrello(url: string, variante: string): Promise<number | null> {
+  try {
+    // `no-store`: un conteggio vecchio dalla cache darebbe un falso «non confermato» (review #244).
+    const res = await fetch(url, { cache: 'no-store', credentials: 'same-origin', headers: { Accept: 'application/json' } });
+    if (!res.ok) return null;
+    const cart = (await res.json()) as { items?: { variant_id?: unknown; quantity?: unknown }[] };
+    if (!Array.isArray(cart.items)) return null;
+    return cart.items
+      .filter((riga) => String(riga.variant_id) === variante)
+      .reduce((somma, riga) => somma + (typeof riga.quantity === 'number' ? riga.quantity : 0), 0);
+  } catch {
+    return null;
+  }
+}
+
+/** True appena il carrello ha più pezzi di `prima`, false allo scadere dell'attesa. */
+async function attendiAumento(url: string, variante: string, prima: number): Promise<boolean> {
+  const fine = Date.now() + ATTESA_MS;
+  while (Date.now() < fine) {
+    await new Promise((r) => setTimeout(r, PASSO_MS));
+    const ora = await contaCarrello(url, variante);
+    if (ora != null && ora > prima) return true;
+  }
+  return false;
 }
 
 /**
@@ -146,9 +209,23 @@ export interface AddToCartCallbacks {
  * ⚠️ Restituire `null` invece di un pulsante inerte è la scelta importante di
  * questo file: un «aggiungi al carrello» che non aggiunge niente fa credere a
  * chi compra di aver comprato, e il difetto si scopre al momento di pagare.
+ *
+ * 🔑 2026-09-23 (Arou, collaudo con Mem): **l'acquirente deve sapere se il capo
+ * è nel carrello.** Prima il clic chiudeva la cabina contando sul drawer del
+ * tema; su un tema senza drawer la prova spariva e non succedeva niente di
+ * visibile. Su Shopify ora la cabina resta aperta e il pulsante dice l'esito,
+ * **letto dal carrello** (`cart.js` prima e dopo il clic), non supposto:
+ * «Aggiunto ✓» porta poi al carrello. Fuori da Shopify l'esito non si legge, e
+ * resta la chiusura di prima.
+ *
+ * ⚠️ **Il pulsante del tema si preme una volta sola** (review #244). Se il
+ * carrello non cambia entro l'attesa il pulsante dice «non confermato» e porta
+ * al carrello, invece di offrire un «riprova»: un'aggiunta più lenta
+ * dell'attesa arriverebbe comunque, e il secondo clic comprerebbe due volte.
+ * Un rifiuto vero (esaurito, quantità) lo mostra il tema sul suo pulsante.
  */
 export function createAddToCartButton(
-  etichetta: string,
+  testi: AddToCartLabels,
   callbacks: AddToCartCallbacks,
 ): HTMLButtonElement | null {
   const pulsanteTema = trovaPulsanteAcquisto();
@@ -160,19 +237,55 @@ export function createAddToCartButton(
   // pulsante «Prova», che apriva la cabina e inviava il form nello stesso clic.
   bottone.type = 'button';
   bottone.setAttribute('data-cabina-action-cart', '');
-  bottone.textContent = etichetta;
+  // L'esito cambia il testo del pulsante: annunciato anche a chi usa uno screen reader.
+  bottone.setAttribute('aria-live', 'polite');
+  bottone.textContent = testi.add;
   // Lo stesso stile degli altri bottoni della barra, in variante piena: è
   // l'azione per cui l'acquirente è qui, non la quarta di una fila.
   bottone.style.cssText = buttonStyle({ primario: true });
 
-  bottone.addEventListener('click', () => {
+  // Dopo l'esito, confermato o no, il pulsante porta al carrello.
+  let carrello: string | null = null;
+
+  const esito = (url: string, stato: 'added' | 'failed'): void => {
+    carrello = url.replace(/\.js$/, '');
+    bottone.disabled = false;
+    bottone.setAttribute('data-cabina-cart-state', stato);
+    bottone.textContent = stato === 'added' ? testi.added : testi.failed;
+  };
+
+  bottone.addEventListener('click', async () => {
     if (bottone.disabled) return;
+    if (carrello) {
+      window.location.assign(carrello);
+      return;
+    }
     bottone.disabled = true;
+
     // Il click parte comunque, anche se il pulsante del tema è coperto
     // dall'overlay della cabina: `.click()` non ha bisogno che l'elemento sia
     // visibile o raggiungibile dal mouse.
+    const url = cartJsUrl();
+    if (!url) {
+      pulsanteTema.click();
+      callbacks.onAdded();
+      return;
+    }
+
+    bottone.textContent = testi.adding;
+    // La variante che il tema sta per aggiungere: quella nel suo form, al momento del clic.
+    const variante =
+      pulsanteTema.closest('form')?.querySelector<HTMLInputElement | HTMLSelectElement>('[name="id"]')?.value || null;
+    // Senza variante o con il carrello illeggibile l'esito non si verifica: si
+    // preme il tema e si chiude come prima, mai un esito indovinato (review #244).
+    const prima = variante ? await contaCarrello(url, variante) : null;
+    if (!variante || prima == null) {
+      pulsanteTema.click();
+      callbacks.onAdded();
+      return;
+    }
     pulsanteTema.click();
-    callbacks.onAdded();
+    esito(url, (await attendiAumento(url, variante, prima)) ? 'added' : 'failed');
   });
 
   return bottone;

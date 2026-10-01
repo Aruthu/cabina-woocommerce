@@ -208,7 +208,16 @@
 // ⚠️ 2026-08-22 (4) — la casella del consenso nasce VUOTA ogni volta: prima
 // rinasceva spuntata dal `localStorage`, e l'acquirente la trovava accettata al
 // posto suo. Il salvataggio resta per la stessa visita e come traccia.
-export const WIDGET_SRI = 'sha384-Dwec0IP7W1GqmgftM3P3JhuIEOLjJ+Mn2XiQk3ZFCR/Rh8ufzxGcSEDhxuBhaXrg';
+// ⚠️ 2026-09-22 — rigenerato per il 2K garantito: `downscalePhotoDataUrl` con
+// `enlarge` porta la foto del try-on a 2048 sul lato lungo anche se è più
+// piccola (Pruna restituisce la risoluzione dell'ingresso; il sito promette
+// «2K» senza «fino a»). La stima misure resta a 1024. Banco in
+// `apps/rendering/poc_generativo/banco_2k.py`.
+// ⚠️ 2026-09-22 — rigenerato per il consenso **v5**: il destinatario di misure,
+// categoria e giudice passa da Novita AI a Vercel AI Gateway (modello OpenAI,
+// host Azure con zero conservazione), perché Novita ritira il modello il 09/10.
+// Cambiano i dizionari (8 lingue) E `CURRENT_PHOTO_CONSENT_VERSION` nel codice.
+export const WIDGET_SRI ='sha384-AfVayRp4t1JsarBl3denprWg3pcs6Eq7Tn3XeZMxInrR4IKRCAbKfHgv+Tgsg2ro';
 
 /**
  * URL pubblico del bundle widget. Fonte unica per snippet manuale, ScriptTag

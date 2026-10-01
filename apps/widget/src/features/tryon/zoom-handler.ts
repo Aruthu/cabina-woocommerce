@@ -1,10 +1,20 @@
 /**
  * Zoom Handler — gestisce zoom e pan dell'immagine try-on.
  *
- * Desktop: wheel → zoom (1×–3×), pointermove (drag con left button) → pan
- * Mobile: pinch (2 dita) → zoom, 1 dito drag → pan
- * Doppio tap → reset zoom e pan a default (1×, centrato).
+ * Desktop: wheel → zoom (1×–3×) **verso il puntatore**, drag col tasto sinistro → pan
+ * Mobile: pinch (2 dita) → zoom verso il centro delle dita, 1 dito drag → pan
+ * Doppio tap/click → a 1× ingrandisce sul punto toccato, altrimenti torna a 1×.
  * Pan abilitato solo quando scale > 1.01.
+ *
+ * 28/09 (Arou): «l'app può provare fino a tre capi insieme: maglia più scarpe,
+ * come farà il cliente a zoomare per vederle bene?». Fino a ieri lo zoom
+ * partiva da un punto fisso deciso dalla categoria del capo della pagina
+ * (`puntoDelCapo`): con due o tre capi non esiste un punto giusto. Ora lo zoom
+ * va **dove il cliente indica** — il puntatore, il centro del pinch, il tocco —
+ * come in qualunque visore di foto: per vedere le scarpe si punta alle scarpe.
+ *
+ * La trasformazione è `translate(t) scale(s)` con origine `0 0`: un punto `p`
+ * della foto (in px del contenitore, non trasformati) finisce in `t + s·p`.
  *
  * [Source: architecture.md#Story 3.7 — FR-11, AC2]
  */
@@ -26,16 +36,44 @@ export interface ZoomHandler {
   reset(): void;
 }
 
+/** Misure in px del contenitore, non trasformate: dove sta la foto dentro
+ *  (`object-fit: contain` lascia bande). */
+export interface MisureZoom {
+  larghezza: number;
+  altezza: number;
+  foto: { x0: number; y0: number; x1: number; y1: number };
+}
+
 export interface ZoomCallbacks {
   /** Chiamato ogni volta che la trasformazione cambia. */
   onTransformChange: (transform: ZoomTransform) => void;
+  /** Se c'è, lo scorrimento resta dentro i bordi della foto (27/09). */
+  misure?: () => MisureZoom | null;
+}
+
+/**
+ * Quanto si può traslare su un asse perché la foto non lasci mai vedere la
+ * pagina sotto (Arou, 27/09: «permettere lo scorrimento dell'immagine così si
+ * vede come si desidera»). Con `translate(t) scale(s)` il bordo `fotoDa` finisce
+ * in `t + s·fotoDa`: se la foto ingrandita è più larga della vista deve coprirla
+ * tutta, se è più stretta resta centrata (una sola posizione ammessa).
+ */
+export function limitiScorrimento(vista: number, fotoDa: number, fotoA: number, scala: number): [number, number] {
+  if (scala * (fotoA - fotoDa) <= vista) {
+    const centro = vista / 2 - (scala * (fotoDa + fotoA)) / 2;
+    return [centro, centro];
+  }
+  return [vista - scala * fotoA, -scala * fotoDa];
 }
 
 const MIN_SCALE = 1;
 const MAX_SCALE = 3;
 const ZOOM_SENSITIVITY = 0.001; // wheel delta multiplier
+/** Quanto ingrandisce un doppio tap a 1×: abbastanza da vedere una scarpa, non da perdersi. */
+const DOUBLE_TAP_SCALE = 2.5;
+/** Oltre questi px un pointerdown→pointerup è un trascinamento, non un click. */
+const DRAG_THRESHOLD = 4;
 const DOUBLE_TAP_DELAY = 300; // ms per riconoscere doppio tap
-const PINCH_PAN_THRESHOLD = 10; // px per distinguere pinch da pan a 2 dita
 
 export function createZoomHandler(callbacks: ZoomCallbacks): ZoomHandler {
   let container: HTMLElement | null = null;
@@ -56,39 +94,68 @@ export function createZoomHandler(callbacks: ZoomCallbacks): ZoomHandler {
   // State per doppio tap
   let lastTapTime = 0;
 
+  // Un trascinamento per spostarsi nello zoom finisce con un click: senza
+  // fermarlo, il reveal slider lo leggeva come «sposta qui la maniglia» e
+  // la prova spariva dietro la foto originale (visto il 27/09 sulle scarpe).
+  let trascinato = false;
+
   function clampScale(scale: number): number {
     return Math.max(MIN_SCALE, Math.min(MAX_SCALE, scale));
   }
 
-  function clampPan(tx: number, ty: number, scale: number): { tx: number; ty: number } {
-    // Limita il pan a +/- 50% dell'immagine zoommata rispetto al centro
-    const maxPan = Math.max(0, (scale - 1) * 100);
-    return {
-      tx: Math.max(-maxPan, Math.min(maxPan, tx)),
-      ty: Math.max(-maxPan, Math.min(maxPan, ty)),
-    };
-  }
-
   function updateTransform(partial: Partial<ZoomTransform>): void {
     currentTransform = { ...currentTransform, ...partial };
-    // Clamp scale
     if (partial.scale !== undefined) {
       currentTransform.scale = clampScale(currentTransform.scale);
     }
-    // Clamp pan se scale è ~1
+    // Senza misure (foto non ancora caricata, o chiamante senza callback) la
+    // foto si assume grande quanto il contenitore: i limiti restano veri, e
+    // l'ancora di `zoomVerso` non viene schiacciata da un tetto arbitrario
+    // (rilievo Kilo sulla #268: prima ±100 px per unità di scala).
+    const m = callbacks.misure?.() ?? misureDelContenitore();
     if (currentTransform.scale <= 1.01) {
+      currentTransform.scale = 1;
       currentTransform.translateX = 0;
       currentTransform.translateY = 0;
-    } else if (partial.translateX !== undefined || partial.translateY !== undefined) {
-      const clamped = clampPan(
-        currentTransform.translateX,
-        currentTransform.translateY,
-        currentTransform.scale,
-      );
-      currentTransform.translateX = clamped.tx;
-      currentTransform.translateY = clamped.ty;
+    } else if (m) {
+      // Anche a zoom cambiato, non solo a scorrimento: rimpicciolendo, la foto
+      // spostata al massimo lascerebbe una banda vuota.
+      const s = currentTransform.scale;
+      const [x0, x1] = limitiScorrimento(m.larghezza, m.foto.x0, m.foto.x1, s);
+      const [y0, y1] = limitiScorrimento(m.altezza, m.foto.y0, m.foto.y1, s);
+      currentTransform.translateX = Math.max(x0, Math.min(x1, currentTransform.translateX));
+      currentTransform.translateY = Math.max(y0, Math.min(y1, currentTransform.translateY));
     }
     callbacks.onTransformChange({ ...currentTransform });
+  }
+
+  function misureDelContenitore(): MisureZoom | null {
+    if (!container) return null;
+    const larghezza = container.clientWidth;
+    const altezza = container.clientHeight;
+    // Senza layout (nascosto, non ancora montato) non c'è niente da limitare:
+    // un rettangolo 0×0 inchioderebbe la traslazione a zero (Kilo, #268).
+    if (!larghezza || !altezza) return null;
+    return { larghezza, altezza, foto: { x0: 0, y0: 0, x1: larghezza, y1: altezza } };
+  }
+
+  /** Coordinate di un evento dentro il contenitore (px non trasformati). */
+  function puntoNelContenitore(clientX: number, clientY: number): { x: number; y: number } {
+    const r = container?.getBoundingClientRect();
+    return r ? { x: clientX - r.left, y: clientY - r.top } : { x: clientX, y: clientY };
+  }
+
+  /**
+   * Porta la scala a `nuovaScala` tenendo fermo, sullo schermo, il punto della
+   * foto che sta sotto `(x, y)`: quello che il cliente indica resta dov'è e
+   * cresce intorno a sé. Da `x = t + s·p` segue `p = (x − t)/s` e `t' = x − s'·p`.
+   */
+  function zoomVerso(nuovaScala: number, x: number, y: number): void {
+    const s = currentTransform.scale;
+    const s2 = clampScale(nuovaScala);
+    const px = (x - currentTransform.translateX) / s;
+    const py = (y - currentTransform.translateY) / s;
+    updateTransform({ scale: s2, translateX: x - s2 * px, translateY: y - s2 * py });
   }
 
   // ── Wheel (desktop zoom) ──────────────────────────────────────────────
@@ -96,8 +163,8 @@ export function createZoomHandler(callbacks: ZoomCallbacks): ZoomHandler {
   function handleWheel(e: WheelEvent): void {
     e.preventDefault();
     const delta = -e.deltaY * ZOOM_SENSITIVITY;
-    const newScale = currentTransform.scale + delta;
-    updateTransform({ scale: newScale });
+    const { x, y } = puntoNelContenitore(e.clientX, e.clientY);
+    zoomVerso(currentTransform.scale + delta, x, y);
   }
 
   // ── Touch per pinch e pan (mobile) ────────────────────────────────────
@@ -107,6 +174,13 @@ export function createZoomHandler(callbacks: ZoomCallbacks): ZoomHandler {
     const dx = touches[0].clientX - touches[1].clientX;
     const dy = touches[0].clientY - touches[1].clientY;
     return Math.sqrt(dx * dx + dy * dy);
+  }
+
+  function centroDelPinch(touches: TouchList): { x: number; y: number } {
+    return puntoNelContenitore(
+      (touches[0].clientX + touches[1].clientX) / 2,
+      (touches[0].clientY + touches[1].clientY) / 2,
+    );
   }
 
   function handleTouchStart(e: TouchEvent): void {
@@ -128,21 +202,22 @@ export function createZoomHandler(callbacks: ZoomCallbacks): ZoomHandler {
 
   function handleTouchMove(e: TouchEvent): void {
     if (isPinching && e.touches.length === 2) {
-      // Pinch in corso
+      // Pinch in corso: la scala cresce verso il centro delle due dita, e se
+      // le dita si spostano insieme il centro le segue (pan a due dita).
       const currentDist = getTouchDistance(e.touches);
       if (pinchStartDist > 0) {
-        const newScale = pinchStartScale * (currentDist / pinchStartDist);
-        updateTransform({ scale: newScale });
+        const { x, y } = centroDelPinch(e.touches);
+        zoomVerso(pinchStartScale * (currentDist / pinchStartDist), x, y);
       }
       e.preventDefault();
     } else if (isPanning && e.touches.length === 1 && currentTransform.scale > 1.01) {
-      // Pan in corso
-      const deltaX = e.touches[0].clientX - panStartX;
-      const deltaY = e.touches[0].clientY - panStartY;
+      // Pan in corso: il translate è fuori dalla scala, quindi un px di dito
+      // è un px di foto.
       updateTransform({
-        translateX: panStartTranslateX + deltaX,
-        translateY: panStartTranslateY + deltaY,
+        translateX: panStartTranslateX + (e.touches[0].clientX - panStartX),
+        translateY: panStartTranslateY + (e.touches[0].clientY - panStartY),
       });
+      e.preventDefault();
     }
   }
 
@@ -166,11 +241,19 @@ export function createZoomHandler(callbacks: ZoomCallbacks): ZoomHandler {
     if (currentTransform.scale <= 1.01) return;
 
     pointerPanning = true;
+    trascinato = false;
     pointerStartX = e.clientX;
     pointerStartY = e.clientY;
     pointerStartTx = currentTransform.translateX;
     pointerStartTy = currentTransform.translateY;
     e.preventDefault();
+    // Il trascinamento continua anche se il puntatore esce dal riquadro
+    // (a 3× il bordo è vicino): senza la cattura il pan si fermava lì.
+    try {
+      container?.setPointerCapture(e.pointerId);
+    } catch {
+      /* jsdom e browser vecchi: si trascina finché si resta dentro */
+    }
   }
 
   function handlePointerMove(e: PointerEvent): void {
@@ -178,23 +261,44 @@ export function createZoomHandler(callbacks: ZoomCallbacks): ZoomHandler {
 
     const deltaX = e.clientX - pointerStartX;
     const deltaY = e.clientY - pointerStartY;
-    updateTransform({
-      translateX: pointerStartTx + deltaX * (1 / currentTransform.scale),
-      translateY: pointerStartTy + deltaY * (1 / currentTransform.scale),
-    });
+    if (Math.abs(deltaX) > DRAG_THRESHOLD || Math.abs(deltaY) > DRAG_THRESHOLD) trascinato = true;
+    updateTransform({ translateX: pointerStartTx + deltaX, translateY: pointerStartTy + deltaY });
   }
 
   function handlePointerUp(): void {
     pointerPanning = false;
   }
 
-  // ── Doppio tap reset ──────────────────────────────────────────────────
+  /**
+   * Le tre `<img>` della prova sono trascinabili di loro: al secondo px di
+   * movimento il browser avviava il drag nativo dell'immagine (il fantasma
+   * semitrasparente) e mandava `pointercancel` al nostro pan — con un mouse
+   * vero la foto ingrandita restava ferma (Arou, 28/09: «quando ingrandisce
+   * l'immagine non si sposta più»). I banchi non lo vedevano: gli eventi
+   * sintetici non fanno partire il drag nativo.
+   */
+  function handleDragStart(e: DragEvent): void {
+    e.preventDefault();
+  }
+
+  /** In cattura, prima dei figli (il reveal slider): il click di fine trascinamento non arriva. */
+  function handleClickCapture(e: MouseEvent): void {
+    if (!trascinato) return;
+    trascinato = false;
+    e.stopPropagation();
+  }
+
+  // ── Doppio tap: ingrandisce sul punto, o torna a 1× ──────────────────
 
   function handleClick(e: MouseEvent): void {
     const now = Date.now();
     if (now - lastTapTime < DOUBLE_TAP_DELAY) {
-      // Doppio tap!
-      updateTransform({ scale: 1, translateX: 0, translateY: 0 });
+      if (currentTransform.scale > 1.01) {
+        updateTransform({ scale: 1, translateX: 0, translateY: 0 });
+      } else {
+        const { x, y } = puntoNelContenitore(e.clientX, e.clientY);
+        zoomVerso(DOUBLE_TAP_SCALE, x, y);
+      }
     }
     lastTapTime = now;
   }
@@ -219,9 +323,15 @@ export function createZoomHandler(callbacks: ZoomCallbacks): ZoomHandler {
     el.addEventListener('pointermove', handlePointerMove);
     el.addEventListener('pointerup', handlePointerUp);
     el.addEventListener('pointercancel', handlePointerUp);
+    el.addEventListener('dragstart', handleDragStart);
+    // Niente selezione di testo né gesti del browser (scroll, zoom della
+    // pagina) sopra la prova: qui i gesti sono nostri.
+    el.style.userSelect = 'none';
+    el.style.touchAction = 'none';
 
-    // Doppio tap reset
+    // Doppio tap
     el.addEventListener('click', handleClick);
+    el.addEventListener('click', handleClickCapture, true);
   }
 
   function detach(): void {
@@ -236,7 +346,9 @@ export function createZoomHandler(callbacks: ZoomCallbacks): ZoomHandler {
     container.removeEventListener('pointermove', handlePointerMove);
     container.removeEventListener('pointerup', handlePointerUp);
     container.removeEventListener('pointercancel', handlePointerUp);
+    container.removeEventListener('dragstart', handleDragStart);
     container.removeEventListener('click', handleClick);
+    container.removeEventListener('click', handleClickCapture, true);
 
     container = null;
     isPinching = false;

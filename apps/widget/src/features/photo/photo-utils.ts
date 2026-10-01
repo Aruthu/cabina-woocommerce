@@ -175,9 +175,19 @@ export function fitWithinMaxEdge(
   width: number,
   height: number,
   maxEdge: number = PHOTO_MAX_EDGE_PX,
+  /**
+   * 2026-09-22 — `true` porta a `maxEdge` ANCHE una foto più piccola. Serve al
+   * try-on: Pruna restituisce la risoluzione dell'ingresso, e il sito promette
+   * il 2K senza «fino a» (Arou: «non è fino a 2K, è proprio 2K»). Una foto da
+   * 1200 px ingrandita non guadagna dettaglio, ma il risultato è 2048 px come
+   * promesso, e Pruna lavora sulla stessa tela delle modelle preset.
+   * Resta `false` per la stima misure: là ingrandire non serve a nulla.
+   */
+  enlarge = false,
 ): { width: number; height: number } {
   const longest = Math.max(width, height);
-  if (longest <= maxEdge || longest <= 0) return { width, height };
+  if (longest <= 0 || longest === maxEdge) return { width, height };
+  if (longest < maxEdge && !enlarge) return { width, height };
   const scale = maxEdge / longest;
   return { width: Math.round(width * scale), height: Math.round(height * scale) };
 }
@@ -230,11 +240,13 @@ export function encodePhotoCanvas(canvas: HTMLCanvasElement): string {
 export function downscalePhotoDataUrl(
   dataUrl: string,
   maxEdge: number = PHOTO_MAX_EDGE_PX,
+  /** Vedi `fitWithinMaxEdge`: `true` solo sulla foto per il try-on. */
+  enlarge = false,
 ): Promise<string> {
   return new Promise((resolve, reject) => {
     const img = new Image();
     img.onload = () => {
-      const { width, height } = fitWithinMaxEdge(img.naturalWidth, img.naturalHeight, maxEdge);
+      const { width, height } = fitWithinMaxEdge(img.naturalWidth, img.naturalHeight, maxEdge, enlarge);
       // 🔑 **Ogni foto passa dal canvas, senza scorciatoie.** Fino al 16/08 qui
       // c'era una via veloce: foto già alle dimensioni giuste, già sotto il
       // limite di peso e già nel formato di uscita → si restituiva l'originale

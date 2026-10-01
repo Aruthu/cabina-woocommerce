@@ -154,7 +154,9 @@ export function createRevealSlider(
     'box-shadow:0 0 8px rgba(0,0,0,0.4)',
     'cursor:ew-resize',
     'z-index:2',
-    'transform:translateX(-50%)',
+    // `--cabina-zoom` lo scrive la prova quando si zooma (27/09): la riga, il
+    // pomello e l'etichetta seguono il punto del confronto ma non si ingrandiscono.
+    'transform:translateX(-50%) scaleX(calc(1 / var(--cabina-zoom, 1)))',
   ].join(';');
   // Il pomello con le frecce, al centro della riga. ⚠️ Senza, la freccia era il
   // solo carattere «↔» dentro l'etichetta in basso: Arou, provando, non l'ha
@@ -167,7 +169,8 @@ export function createRevealSlider(
     'position:absolute',
     'top:50%',
     'left:50%',
-    'transform:translate(-50%,-50%)',
+    // Solo in verticale: in orizzontale lo compensa già la riga, che lo contiene.
+    'transform:translate(-50%,-50%) scaleY(calc(1 / var(--cabina-zoom, 1)))',
     // ⚠️ 2026-08-20 (Arou) — da 36px a 48. A 36 il pomello si perdeva sulla
     // foto, e chi non lo nota vede meta risultato e se ne va senza aver capito
     // che c'era un confronto da trascinare. Dentro il riquadro del tema la
@@ -226,7 +229,8 @@ export function createRevealSlider(
     'position:absolute',
     'left:50%',
     'top:16px',
-    'transform:translateX(-50%)',
+    'transform:translateX(-50%) scale(calc(1 / var(--cabina-zoom, 1)))',
+    'transform-origin:top center',
     'padding:6px 12px',
     'border-radius:999px',
     'background:rgba(0,0,0,0.6)',

@@ -3,7 +3,7 @@
  * Plugin Name: Cabina — Virtual Try-On for WooCommerce
  * Plugin URI: https://cabina.io/en/integrations/woocommerce
  * Description: Add a try-on button to your product pages. Cabina lets your customers virtually try on garments using their own photo. Zero code required.
- * Version: 1.2.0
+ * Version: 1.2.1
  * Author: Cabina
  * Author URI: https://cabina.io
  * License: GPLv2 or later
@@ -20,7 +20,7 @@
 
 defined('ABSPATH') || exit;
 
-define('CABINA_VERSION', '1.2.0');
+define('CABINA_VERSION', '1.2.1');
 define('CABINA_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('CABINA_PLUGIN_URL', plugin_dir_url(__FILE__));
 // 📌 2026-09-09 — il widget e' DENTRO il plugin (assets/widget.iife.js, build

@@ -4,6 +4,7 @@ import {
   assessPhotoQuality,
   downscalePhotoDataUrl,
   isHeicFile,
+  PHOTO_MAX_EDGE_PX,
   type PhotoQualityResult,
 } from './photo-utils';
 
@@ -120,7 +121,7 @@ export function createPhotoCapture(
   preview.setAttribute('data-cabina-photo-preview', '');
   preview.style.cssText = [
     'width:100%',
-    'height:200px',
+    'height:120px',
     'border:2px dashed #d1d5db',
     'border-radius:8px',
     'display:flex',
@@ -315,8 +316,15 @@ export function createPhotoCapture(
       const dataUrl = await readFileAsDataUrl(file);
       // Resize UNA volta qui (2026-07-31, bug PHOTO_TOO_LARGE): photoData resta
       // gestibile per la stima misure e per il try-on.
-      const downscaled = await downscalePhotoDataUrl(dataUrl);
-      const quality = await assessPhotoQuality(downscaled);
+      // 2026-09-22 — il gate di qualità conta i PIXEL VERI, quindi si valuta
+      // sulla foto solo ridotta; poi, per il try-on, `enlarge` porta il lato
+      // lungo a 2048 anche se la foto è più piccola (il sito promette 2K).
+      // ⚠️ Rilievo Kilo (PR #242): valutare la qualità DOPO l'ingrandimento
+      // faceva passare come «ottima» qualunque foto, perché ogni foto arrivava
+      // a 3 MP. Le due passate partono entrambe dall'originale, così la copia
+      // per il try-on non è ricodificata due volte.
+      const quality = await assessPhotoQuality(await downscalePhotoDataUrl(dataUrl));
+      const downscaled = await downscalePhotoDataUrl(dataUrl, PHOTO_MAX_EDGE_PX, true);
       if (token !== selectionToken) return; // sorpassata da una selezione più recente
       currentDataUrl = downscaled;
       showPreview(downscaled);

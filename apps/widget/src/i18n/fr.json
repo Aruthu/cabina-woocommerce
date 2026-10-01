@@ -19,7 +19,7 @@
     "quality_optimal": "Excellente",
     "quality_sufficient": "Suffisante",
     "quality_low": "Basse",
-    "consent_text": "J'accepte que ma photo soit envoyée à des services d'IA externes — PrunaAI (États-Unis) pour générer l'essayage, et Novita AI (États-Unis) pour estimer mes mesures et vérifier que le vêtement du résultat est bien le vrai — et j'accepte les {termini} et la {privacy}.",
+    "consent_text": "J'accepte que ma photo soit envoyée à des services d'IA externes — PrunaAI (États-Unis) pour générer l'essayage, et Vercel AI Gateway (États-Unis ; un modèle OpenAI hébergé sur Microsoft Azure) pour estimer mes mesures et vérifier que le vêtement du résultat est bien le vrai — et j'accepte les {termini} et la {privacy}. Je confirme avoir au moins 18 ans.",
     "consent_terms_label": "Conditions générales",
     "consent_privacy_label": "Politique de confidentialité",
     "consent_required": "Acceptez les conditions générales et la politique de confidentialité pour envoyer votre photo"
@@ -61,7 +61,9 @@
   },
   "tryon": {
     "close": "Fermer",
-    "rotate_hint": "Faites glisser pour pivoter"
+    "rotate_hint": "Faites glisser pour pivoter",
+    "enlarge": "Agrandir",
+    "shrink": "Revenir à la page"
   },
   "size": {
     "recommended": "Taille recommandée",
@@ -70,7 +72,9 @@
     "between": "Entre {{size1}} et {{size2}} — nous recommandons {{recommended}} pour plus de confort",
     "confidence_score": "{{score}} % de fiabilité",
     "between_smaller": "Entre {{size1}} et {{size2}} — nous recommandons {{recommended}}",
-    "comfort_hint": "Plus confortable : {{size}} · choisissez la pointure qui vous semble juste"
+    "comfort_hint": "Plus confortable : {{size}} · choisissez la pointure qui vous semble juste",
+    "choose": "Choisir {{size}}",
+    "chosen": "{{size}} sélectionnée ✓"
   },
   "browser": {
     "unsupported_title": "Mettez à jour votre navigateur pour utiliser Cabina",
@@ -121,6 +125,9 @@
     "outfit_label": "Complétez le look",
     "outfit_try": "Essayer ensemble",
     "outfit_loading": "Préparation du look…",
-    "outfit_error": "Le look n'a pas abouti, réessayez"
+    "outfit_error": "Le look n'a pas abouti, réessayez",
+    "adding_to_cart": "Ajout en cours…",
+    "added_to_cart": "Ajouté au panier ✓ · Voir le panier",
+    "add_to_cart_failed": "Non confirmé · Vérifiez votre panier"
   }
 }

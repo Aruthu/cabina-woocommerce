@@ -1,5 +1,6 @@
 /**
- * Preseleziona la taglia consigliata nel selettore della PAGINA PRODOTTO.
+ * Preseleziona la taglia consigliata nel selettore della PAGINA PRODOTTO —
+ * dal 2026-09-23 solo quando l'acquirente lo chiede (pulsante nel badge).
  *
  * Nasce dal collaudo del 2026-08-07: la cabina consigliava L mentre sulla
  * pagina restava selezionata XS. Il consiglio si leggeva e poi andava
@@ -63,24 +64,38 @@ function sameSize(a: string, b: string): boolean {
   return a.trim().toLowerCase() === b.trim().toLowerCase();
 }
 
+/** Il controllo della pagina che corrisponde a una taglia. */
+export interface ControlloTaglia {
+  /** La taglia è già quella scelta sulla pagina. */
+  scelta: () => boolean;
+  /** Seleziona la taglia notificando il tema, come farebbe l'acquirente. */
+  applica: () => void;
+}
+
 /**
- * Cerca il selettore taglia del negozio e ci seleziona `size`.
+ * Cerca nel selettore taglia del negozio l'opzione `size`, **senza toccarla**.
  *
- * @returns true se una selezione è stata applicata (o era già quella giusta),
- *          false se nessun selettore taglia riconoscibile è stato trovato.
+ * 📌 2026-09-23 (Arou, collaudo con Mem): la taglia consigliata non si applica
+ * più da sola. Cabina la consiglia, l'acquirente la conferma con un tocco o ne
+ * sceglie un'altra; per offrire quel tocco serve sapere prima se sulla pagina
+ * esiste un'opzione da selezionare.
+ *
+ * @returns il controllo, o null se nessun selettore taglia riconoscibile la offre.
  */
-export function preselectSizeOnPage(size: string): boolean {
-  if (!size.trim()) return false;
+export function trovaTaglia(size: string): ControlloTaglia | null {
+  if (!size.trim()) return null;
 
   // ── Radio / pill (Shopify Dawn, WooCommerce con varianti a bottoni) ────────
-  const radios = Array.from(
-    document.querySelectorAll<HTMLInputElement>('input[type="radio"]'),
-  ).filter((el) => !isInsideWidget(el) && SIZE_OPTION_NAME.test(optionContext(el)));
-
-  const radio = radios.find((el) => sameSize(el.value, size));
+  const radio = Array.from(document.querySelectorAll<HTMLInputElement>('input[type="radio"]'))
+    .filter((el) => !isInsideWidget(el) && SIZE_OPTION_NAME.test(optionContext(el)))
+    .find((el) => sameSize(el.value, size));
   if (radio) {
-    if (!radio.checked) radio.click();
-    return true;
+    return {
+      scelta: () => radio.checked,
+      applica: () => {
+        if (!radio.checked) radio.click();
+      },
+    };
   }
 
   // ── Select (Dawn in modalità dropdown, PrestaShop, temi classici) ──────────
@@ -93,12 +108,27 @@ export function preselectSizeOnPage(size: string): boolean {
       (o) => sameSize(o.value, size) || sameSize(o.textContent ?? '', size),
     );
     if (!option) continue;
-    if (select.value !== option.value) {
-      select.value = option.value;
-      select.dispatchEvent(new Event('change', { bubbles: true }));
-    }
-    return true;
+    return {
+      scelta: () => select.value === option.value,
+      applica: () => {
+        if (select.value === option.value) return;
+        select.value = option.value;
+        select.dispatchEvent(new Event('change', { bubbles: true }));
+      },
+    };
   }
 
-  return false;
+  return null;
+}
+
+/**
+ * Cerca il selettore taglia del negozio e ci seleziona `size`.
+ *
+ * @returns true se una selezione è stata applicata (o era già quella giusta),
+ *          false se nessun selettore taglia riconoscibile è stato trovato.
+ */
+export function preselectSizeOnPage(size: string): boolean {
+  const controllo = trovaTaglia(size);
+  controllo?.applica();
+  return controllo != null;
 }

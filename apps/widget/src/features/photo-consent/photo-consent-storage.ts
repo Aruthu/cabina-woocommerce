@@ -15,6 +15,15 @@ const STORAGE_PREFIX = 'cabina_photo_consent_';
  * testo (i18n `photo_consent.*`) o il provider esterno cambiano — un consenso
  * dato su una versione precedente NON è più valido (vedi `isPhotoConsentValid`).
  *
+ * ⚠️ 2026-09-22 — **5: cambia il destinatario di misure, categoria e giudice.**
+ * Novita ritira il modello di visione il 09/10/2026; al suo posto un modello
+ * OpenAI (`openai/gpt-5.6-luna`) raggiunto tramite **Vercel AI Gateway** con
+ * zero conservazione, che per quel modello vuol dire un solo host: Microsoft
+ * Azure (`gatewayBody` in `apps/dashboard/src/lib/vision-fetch.ts`). Chi aveva
+ * dato la v4 ha autorizzato Novita, non Vercel/Azure: stesso caso della v2,
+ * un destinatario nuovo si autorizza di nuovo. Il testo nomina il gateway e
+ * l'host, in otto lingue; `JUDGE_MIN_CONSENT_VERSION` sale insieme.
+ *
  * ⚠️ 2026-08-22 — **4: Novita riceve anche il RISULTATO, per un secondo scopo.**
  * Dopo la generazione un giudice vision confronta la foto del capo con
  * l'immagine prodotta — cioè la sembianza dell'acquirente col capo addosso — per
@@ -50,7 +59,7 @@ const STORAGE_PREFIX = 'cabina_photo_consent_';
  * sincronizzare a mano. `i18n/locales-allineati.test.ts` verifica che tutte e
  * cinque nominino il fornitore giusto.
  */
-export const CURRENT_PHOTO_CONSENT_VERSION = 4;
+export const CURRENT_PHOTO_CONSENT_VERSION = 5;
 
 export type { PhotoConsentState };
 

@@ -4,7 +4,7 @@ import type { FashnGarmentCategory } from '@cabina/shared';
 import { resolveLanguage, loadLocale, getLocaleString, getLocaleStringOr, getCurrentLanguage } from './i18n/i18n';
 import { widgetReducer, createInitialContext, resetSessionContext } from './state/machine';
 import { isBrowserSupported, getBrowserUpdateLink } from './utils/browser';
-import { extractProductImageUrl } from './utils/product-image';
+import { caricaImmaginiVarianti, extractProductImageUrl } from './utils/product-image';
 import { createPhotoCapture } from './features/photo/PhotoCapture';
 import { downscalePhotoDataUrl, MEASURE_MAX_EDGE_PX } from './features/photo/photo-utils';
 import { createMeasuresForm } from './features/avatar/measures-form';
@@ -1461,6 +1461,9 @@ function apriSeChiestoDallUrl(): void {
 }
 
 function startGarmentAnalysis(apiKey: string, baseUrl: string): void {
+  // Le foto delle varianti (Shopify): la prova segue il colore scelto dopo
+  // l'apertura della pagina. Senza attesa, perché serve solo al click.
+  void caricaImmaginiVarianti();
   garmentAnalysis = null;
   const productUrl = extractProductImageUrl();
   if (!productUrl) {

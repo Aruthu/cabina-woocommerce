@@ -19,7 +19,7 @@
     "quality_optimal": "Excellent",
     "quality_sufficient": "Sufficient",
     "quality_low": "Low",
-    "consent_text": "I consent to my photo being sent to external AI services — PrunaAI (United States) to generate the try-on, and Novita AI (United States) to estimate my measurements and to check that the garment in the result is the real one — and I accept the {termini} and the {privacy}.",
+    "consent_text": "I consent to my photo being sent to external AI services — PrunaAI (United States) to generate the try-on, and Vercel AI Gateway (United States; an OpenAI model hosted on Microsoft Azure) to estimate my measurements and to check that the garment in the result is the real one — and I accept the {termini} and the {privacy}. I confirm that I am at least 18 years old.",
     "consent_terms_label": "Terms and Conditions",
     "consent_privacy_label": "Privacy Notice",
     "consent_required": "Accept the terms and conditions and the privacy policy to upload your photo"
@@ -61,7 +61,9 @@
   },
   "tryon": {
     "close": "Close",
-    "rotate_hint": "Drag to rotate"
+    "rotate_hint": "Drag to rotate",
+    "enlarge": "Enlarge",
+    "shrink": "Back to the page"
   },
   "size": {
     "recommended": "Recommended size",
@@ -70,7 +72,9 @@
     "between": "Between {{size1}} and {{size2}} — we recommend {{recommended}} for better comfort",
     "confidence_score": "{{score}}% confidence",
     "between_smaller": "Between {{size1}} and {{size2}} — we recommend {{recommended}}",
-    "comfort_hint": "Roomier: {{size}} · feel free to pick the size you think is right"
+    "comfort_hint": "Roomier: {{size}} · feel free to pick the size you think is right",
+    "choose": "Choose {{size}}",
+    "chosen": "{{size}} selected ✓"
   },
   "browser": {
     "unsupported_title": "Update your browser to use Cabina",
@@ -121,6 +125,9 @@
     "outfit_label": "Complete the look",
     "outfit_try": "Try together",
     "outfit_loading": "Putting the look together…",
-    "outfit_error": "The look didn't work, please try again"
+    "outfit_error": "The look didn't work, please try again",
+    "adding_to_cart": "Adding…",
+    "added_to_cart": "Added to cart ✓ · View cart",
+    "add_to_cart_failed": "Not confirmed · Check your cart"
   }
 }

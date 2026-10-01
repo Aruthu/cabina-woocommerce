@@ -19,7 +19,7 @@
     "quality_optimal": "Hervorragend",
     "quality_sufficient": "Ausreichend",
     "quality_low": "Niedrig",
-    "consent_text": "Ich willige ein, dass mein Foto an externe KI-Dienste gesendet wird — PrunaAI (USA) zur Erzeugung der Anprobe und Novita AI (USA) zur Schätzung meiner Maße und zur Prüfung, dass das Kleidungsstück im Ergebnis das echte ist — und ich akzeptiere die {termini} und die {privacy}.",
+    "consent_text": "Ich willige ein, dass mein Foto an externe KI-Dienste gesendet wird — PrunaAI (USA) zur Erzeugung der Anprobe und Vercel AI Gateway (USA; ein OpenAI-Modell, das auf Microsoft Azure läuft) zur Schätzung meiner Maße und zur Prüfung, dass das Kleidungsstück im Ergebnis das echte ist — und ich akzeptiere die {termini} und die {privacy}. Ich bestätige, dass ich mindestens 18 Jahre alt bin.",
     "consent_terms_label": "AGB",
     "consent_privacy_label": "Datenschutzerklärung",
     "consent_required": "Akzeptiere die AGB und die Datenschutzerklärung, um dein Foto hochzuladen"
@@ -61,7 +61,9 @@
   },
   "tryon": {
     "close": "Schließen",
-    "rotate_hint": "Ziehen zum Drehen"
+    "rotate_hint": "Ziehen zum Drehen",
+    "enlarge": "Vergrößern",
+    "shrink": "Zurück zur Seite"
   },
   "size": {
     "recommended": "Empfohlene Größe",
@@ -70,7 +72,9 @@
     "between": "Zwischen {{size1}} und {{size2}} — wir empfehlen {{recommended}} für mehr Komfort",
     "confidence_score": "{{score}}% Zuverlässigkeit",
     "between_smaller": "Zwischen {{size1}} und {{size2}} — wir empfehlen {{recommended}}",
-    "comfort_hint": "Bequemer: {{size}} · wählen Sie gern die Größe, die Ihnen passt"
+    "comfort_hint": "Bequemer: {{size}} · wählen Sie gern die Größe, die Ihnen passt",
+    "choose": "{{size}} wählen",
+    "chosen": "{{size}} ausgewählt ✓"
   },
   "browser": {
     "unsupported_title": "Aktualisieren Sie Ihren Browser, um Cabina zu nutzen",
@@ -121,6 +125,9 @@
     "outfit_label": "Look vervollständigen",
     "outfit_try": "Zusammen anprobieren",
     "outfit_loading": "Look wird erstellt…",
-    "outfit_error": "Das hat nicht geklappt, bitte erneut versuchen"
+    "outfit_error": "Das hat nicht geklappt, bitte erneut versuchen",
+    "adding_to_cart": "Wird hinzugefügt…",
+    "added_to_cart": "Im Warenkorb ✓ · Warenkorb ansehen",
+    "add_to_cart_failed": "Nicht bestätigt · Warenkorb prüfen"
   }
 }

@@ -12,8 +12,8 @@ import { PRODUCT_IMAGE_SELECTORS } from '@cabina/shared';
 import { createRotationHandler, type RotationHandler } from './rotation-handler';
 import { createZoomHandler, type ZoomHandler, type ZoomTransform } from './zoom-handler';
 import { type SizeRecommendation } from '../size/size-recommendation';
-import { preselectSizeOnPage } from '../size/preselect-size';
-import { getLocaleString, getLocaleStringOr } from '../../i18n/i18n';
+import { trovaTaglia } from '../size/preselect-size';
+import { getLocaleString, getLocaleStringDefault, getLocaleStringOr } from '../../i18n/i18n';
 import { createRevealSlider } from '../reveal-result/reveal-slider';
 import { createSelectStyle } from '../reveal-result/select-style';
 import { createResultActions } from '../reveal-result/result-actions';
@@ -42,6 +42,12 @@ let currentAngleIndex = 0;
  * istanza, ma è una guardia altrove: qui non ci si appoggia.)
  */
 let sizeBadgeElement: HTMLElement | null = null;
+/** La barra delle azioni: inline vive nello slot del tema, fuori dall'overlay (24/09). */
+let bottomBarElement: HTMLElement | null = null;
+let barraObserver: ResizeObserver | null = null;
+/** Spazio fra il riquadro e la barra a tutto schermo: è il `gap` dell'overlay
+ *  ED è quello che l'osservatore sottrae al riquadro — un numero solo. */
+const SPAZIO_BARRA = 10;
 
 /**
  * Percentuale accanto alla taglia: SPENTA di default dal 18/09/2026 (Arou).
@@ -157,6 +163,9 @@ function isInline(overlay: HTMLElement): boolean {
  * bastano le due costanti, che sono rimaste al loro posto.
  */
 const SCORE_COLOR = '#4ade80';
+/** Nero pieno del badge E della barra quando stanno in flusso sulla pagina del
+ *  negozio (inline): sul bianco un nero al 60% sfocato usciva grigio (24/09). */
+const NERO_INLINE = 'rgb(31,31,31)';
 
 /**
  * Costruisce lo span inline del punteggio di confidenza (Story 9.3 / AC4).
@@ -179,31 +188,23 @@ function buildScoreSpan(score: number): HTMLElement {
  * effetto visibile: scoperto provando, il 2026-08-03.
  */
 function buildSizeBadge(recommendation: SizeRecommendation, inline = false): HTMLElement {
-  // Preselezione sulla pagina prodotto (Arou, 07/08: la cabina consigliava L e
-  // sulla pagina restava XS). Sta QUI e non ai due chiamanti di proposito: sono
-  // gli stessi due punti che nel 2026-08-03 avevano già fatto divergere il
-  // markup del badge, e il rischio si ripeterebbe identico. Il momento è quello
-  // giusto — è esattamente quando il consiglio viene mostrato all'acquirente.
-  //
-  // ⚠️ 2026-08-10 (Arou) — spenta insieme al badge: era il badge a spiegare
-  // all'acquirente perché la taglia nel menu del negozio cambiava da sola, e
-  // senza spiegazione restava una scrittura silenziosa nel DOM di un sito
-  // altrui — l'unica che il widget faccia.
-  // ⚠️ 2026-08-13 (Arou) — **riaccesa, insieme al badge**: le due cose si
-  // muovono insieme per la stessa ragione, e i due commenti si citano a
-  // vicenda perché nessuno ne muova metà.
-  const PRESELEZIONA_TAGLIA = true;
-  if (PRESELEZIONA_TAGLIA) {
-    preselectSizeOnPage(recommendation.size);
-  }
-
+  // Preselezione sulla pagina prodotto: dal 07/08 la taglia consigliata veniva
+  // scelta da sola nel selettore del negozio (spenta il 10/08, riaccesa il
+  // 13/08 insieme al badge).
+  // ⚠️ 2026-09-23 (Arou, collaudo con Mem): **non più da sola**. «Cabina
+  // consiglia la taglia, il cliente deve confermare se va bene o no, e può
+  // prenderne un'altra.» Nel collaudo la pagina è passata da L a XL senza che
+  // l'acquirente toccasse niente. Ora il badge offre un pulsante «Scegli XL»
+  // (sotto, `buildSizeChoice`) e la scrittura nel DOM del negozio parte solo da
+  // quel tocco.
   const badge = document.createElement('div');
   badge.setAttribute('data-cabina-size-badge', '');
   badge.style.cssText = [
     // ⚠️ 2026-08-13 (Arou) — il badge torna visibile: tolto il `display:none`
     // che lo nascondeva dal 10/08, e con lui torna la preselezione sulla
     // pagina prodotto (qui sopra). Le due cose si muovono insieme: i due
-    // commenti si citano a vicenda perché nessuno ne muova metà.
+    // commenti si citano a vicenda perché nessuno ne muova metà. Dal
+    // 2026-09-23 la preselezione è il pulsante «Scegli» dentro questo badge.
     //
     // Sta dentro `buildSizeBadge` e non ai chiamanti perché questa è la fonte
     // unica dei due percorsi — creazione dell'overlay e `updateSizeBadge` — e
@@ -227,7 +228,7 @@ function buildSizeBadge(recommendation: SizeRecommendation, inline = false): HTM
     // sola opacità avrebbe reso il badge illeggibile sulle foto chiare.
     // Inline il fondale non è più un'immagine ma la pagina del negozio: il
     // nero pieno regge da sé, la sfocatura non ha nulla da appiattire.
-    inline ? 'background:rgb(31,31,31)' : 'background:rgba(0,0,0,0.45)',
+    inline ? `background:${NERO_INLINE}` : 'background:rgba(0,0,0,0.45)',
     'color:#fff',
     'padding:14px 22px',
     'border-radius:10px',
@@ -252,7 +253,9 @@ function buildSizeBadge(recommendation: SizeRecommendation, inline = false): HTM
   sizeLine.style.cssText = 'display:flex;align-items:baseline;justify-content:center;gap:0;';
 
   const sizeText = document.createElement('span');
-  sizeText.style.cssText = 'font-size:26px;font-weight:700;';
+  // 24/09 (Arou): la taglia in verde come la percentuale — è la risposta, si
+  // deve vedere per prima.
+  sizeText.style.cssText = `font-size:26px;font-weight:700;color:${SCORE_COLOR};`;
   sizeText.textContent = recommendation.size;
 
   sizeLine.appendChild(sizeText);
@@ -293,7 +296,60 @@ function buildSizeBadge(recommendation: SizeRecommendation, inline = false): HTM
     badge.appendChild(comfort);
   }
 
+  const scelta = buildSizeChoice(recommendation.size);
+  if (scelta) badge.appendChild(scelta);
+
   return badge;
+}
+
+/**
+ * «Scegli XL»: applica la taglia consigliata al selettore della pagina, **solo
+ * se l'acquirente lo tocca** (2026-09-23, vedi `buildSizeBadge`).
+ *
+ * 📌 `null` se la pagina non ha un selettore taglia con quella voce: un
+ * pulsante che non seleziona niente prometterebbe una scelta che non avviene.
+ * Se la taglia è già quella della pagina il pulsante nasce confermato.
+ */
+function buildSizeChoice(size: string): HTMLButtonElement | null {
+  const controllo = trovaTaglia(size);
+  if (!controllo) return null;
+
+  const bottone = document.createElement('button');
+  // Mai `submit`: il badge inline può finire dentro il form del negozio.
+  bottone.type = 'button';
+  bottone.setAttribute('data-cabina-size-choose', '');
+  bottone.setAttribute('aria-live', 'polite');
+  bottone.style.cssText = [
+    'display:block',
+    'margin:10px auto 0',
+    'padding:8px 16px',
+    'border:1px solid rgba(255,255,255,0.85)',
+    'border-radius:8px',
+    'background:transparent',
+    'color:#fff',
+    'font:inherit',
+    'font-size:14px',
+    'font-weight:600',
+    'cursor:pointer',
+  ].join(';');
+
+  const confermata = (): void => {
+    bottone.textContent = getLocaleStringDefault('size.chosen', '{{size}} selected ✓', { size });
+    bottone.disabled = true;
+    bottone.style.cursor = 'default';
+    bottone.style.opacity = '0.85';
+  };
+
+  if (controllo.scelta()) {
+    confermata();
+  } else {
+    bottone.textContent = getLocaleStringDefault('size.choose', 'Choose {{size}}', { size });
+    bottone.addEventListener('click', () => {
+      controllo.applica();
+      confermata();
+    });
+  }
+  return bottone;
 }
 
 /**
@@ -330,7 +386,10 @@ function mountSizeBadge(
     imageContainerRef ?? overlay.querySelector<HTMLElement>('[data-cabina-tryon-image-container]');
 
   const badge = buildSizeBadge(recommendation, themeHost != null);
-  (themeHost ?? imageContainer ?? overlay).appendChild(badge);
+  // Inline nello slot c'è anche la barra delle azioni (dal 24/09): il badge le
+  // va DAVANTI, qualunque dei due percorsi arrivi per primo.
+  const barra = themeHost?.querySelector<HTMLElement>('[data-cabina-tryon-bottom-bar]') ?? null;
+  (themeHost ?? imageContainer ?? overlay).insertBefore(badge, barra);
   sizeBadgeElement = badge;
   return badge;
 }
@@ -350,6 +409,9 @@ function removeSizeBadge(): void {
  * @param onAngleChange - Callback chiamato quando cambia l'angolo di rotazione (0-3)
  * @returns L'elemento overlay creato
  */
+/** Il riquadro a tutto schermo non è mai più stretto di 3:4 (vedi `misuraIngrandita`). */
+const RAPPORTO_MIN_INGRANDITA = 3 / 4;
+
 export function showTryOnOverlay(
   renderResults: (string | null)[],
   onClose: () => void,
@@ -415,6 +477,10 @@ export function showTryOnOverlay(
           // non il buio del fondale — per questo sotto è stata rinforzata.
           'background:rgba(0,0,0,0.55)',
           'z-index:2147483645',
+          // 24/09: la barra delle azioni sta SOTTO il riquadro, in flusso
+          // (vedi `bottomBar`): colonna, così non copre nulla.
+          'flex-direction:column',
+          `gap:${SPAZIO_BARRA}px`,
         ]),
     'display:flex',
     'align-items:center',
@@ -440,7 +506,6 @@ export function showTryOnOverlay(
       ? ['width:100%', 'height:100%', 'max-width:100%', 'max-height:100%', 'border-radius:inherit']
       : ['max-width:90vw', 'max-height:90vh', 'border-radius:12px', 'box-shadow:0 12px 48px rgba(0,0,0,0.55)']),
     'overflow:hidden',
-    'transition:transform 0.08s ease-out',
   ].join(';');
 
   // Wrapper per tutte le immagini degli angoli (posizionate una sopra l'altra)
@@ -491,12 +556,18 @@ export function showTryOnOverlay(
   if (hasFront && apiContext) {
     bottomBar = document.createElement('div');
     bottomBar.setAttribute('data-cabina-tryon-bottom-bar', '');
+    // ⚠️ 2026-09-24 — fino a oggi era `position:absolute; bottom:80px; left:0;
+    // right:0` figlia dell'overlay: inline finiva in mezzo alla prova, sopra la
+    // modella e il capo (misurato su Completo, chelsea-boot); a tutto schermo
+    // era larga quanto la finestra e copriva il badge della taglia (misurato
+    // su cabina.io/en/demo/crewneck: badge 686–825 px, barra 748–809). Ora è
+    // in FLUSSO: inline nello slot della taglia del tema, sotto la prova e
+    // sotto il badge (`mountSizeBadge` lo mette davanti); a tutto schermo
+    // sotto il riquadro, larga quanto lui
+    // (l'osservatore al montaggio, più sotto, cede al riquadro lo spazio
+    // che la barra si prende).
     bottomBar.style.cssText = [
-      'position:absolute',
-      'bottom:80px',
-      'left:0',
-      'right:0',
-      'z-index:3',
+      ...(inline ? ['width:100%'] : ['flex:none', 'box-sizing:border-box']),
       'display:flex',
       'flex-direction:column',
       'gap:8px',
@@ -586,12 +657,19 @@ export function showTryOnOverlay(
      * 📌 Può essere `null` — se la pagina non ha un pulsante d'acquisto da
      * premere non mostriamo niente, invece di un pulsante che non compra.
      */
-    const addToCart = createAddToCartButton(getLocaleString('reveal_result.add_to_cart'), {
-      // La stessa uscita del pulsante ✕: dopo l'aggiunta l'acquirente deve
-      // vedere il carrello del negozio — spesso un drawer che si apre da solo —
-      // non restare davanti alla propria foto.
-      onAdded: onClose,
-    });
+    const addToCart = createAddToCartButton(
+      {
+        add: getLocaleString('reveal_result.add_to_cart'),
+        adding: getLocaleStringDefault('reveal_result.adding_to_cart', 'Adding…'),
+        added: getLocaleStringDefault('reveal_result.added_to_cart', 'Added to cart ✓ · View cart'),
+        failed: getLocaleStringDefault('reveal_result.add_to_cart_failed', 'Not confirmed · Check your cart'),
+      },
+      {
+        // Fuori da Shopify l'esito non si legge: la stessa uscita del pulsante
+        // ✕, e il riscontro è il drawer o la pagina del carrello del tema.
+        onAdded: onClose,
+      },
+    );
     if (addToCart) bottomBar.appendChild(addToCart);
 
     resultActions = createResultActions(
@@ -608,6 +686,17 @@ export function showTryOnOverlay(
       },
     );
     bottomBar.appendChild(resultActions.fragment);
+    // Inline la barra sta sulla pagina del negozio, sotto il badge: lo stesso
+    // nero pieno del badge (24/09, Arou). Il 60% con sfocatura è pensato per
+    // stare sopra una foto, e sul bianco veniva grigio.
+    if (inline) {
+      const azioni = bottomBar.querySelector<HTMLElement>('[data-cabina-result-actions]');
+      if (azioni) {
+        azioni.style.background = NERO_INLINE;
+        azioni.style.backdropFilter = '';
+        azioni.style.setProperty('-webkit-backdrop-filter', '');
+      }
+    }
   }
 
   // ⚠️ 2026-07-29 — Elemento di misura: è l'UNICO figlio in flusso di
@@ -724,9 +813,38 @@ export function showTryOnOverlay(
 
   // ── Zoom Handler ──────────────────────────────────────────────────────
 
+  // Lo zoom va sulle sole immagini, non sul riquadro (27/09): ✕ e ← stanno
+  // nel riquadro e a 3× uscivano dalla vista; il riquadro resta la finestra
+  // (`overflow:hidden`) dentro cui la foto ingrandita scorre.
+  // Origine `0 0` e `translate` PRIMA di `scale` (28/09): così lo zoom può
+  // andare verso il punto che il cliente indica — con più capi provati insieme
+  // non c'è un punto fisso buono per tutti — e un px di trascinamento è un px.
+  imagesWrapper.style.transformOrigin = '0 0';
+  imagesWrapper.style.transition = 'transform 0.08s ease-out';
   zoomHandler = createZoomHandler({
     onTransformChange: (transform: ZoomTransform) => {
-      imageContainer.style.transform = `scale(${transform.scale}) translate(${transform.translateX}px, ${transform.translateY}px)`;
+      imagesWrapper.style.transform = `translate(${transform.translateX}px, ${transform.translateY}px) scale(${transform.scale})`;
+      imagesWrapper.style.setProperty('--cabina-zoom', String(transform.scale));
+    },
+    // Misure di layout (client*, che la trasformazione non tocca) e rettangolo
+    // della foto dentro il contenitore: `object-fit: contain` la centra e
+    // lascia bande dove le proporzioni non coincidono. Si misura lo STESSO
+    // elemento a cui è agganciato lo zoom e contro cui si legge il puntatore
+    // (`imageContainer`): inline e ingrandito il wrapper lo riempie al 100%,
+    // ma un solo riferimento non lascia il dubbio (rilievo Kilo sulla #268).
+    misure: () => {
+      const larghezza = imageContainer.clientWidth;
+      const altezza = imageContainer.clientHeight;
+      const img = [...imagesWrapper.querySelectorAll('img')].find((i) => i.naturalWidth > 0);
+      if (!larghezza || !altezza || !img) return null;
+      const k = Math.min(larghezza / img.naturalWidth, altezza / img.naturalHeight);
+      const w = img.naturalWidth * k;
+      const h = img.naturalHeight * k;
+      return {
+        larghezza,
+        altezza,
+        foto: { x0: (larghezza - w) / 2, y0: (altezza - h) / 2, x1: (larghezza + w) / 2, y1: (altezza + h) / 2 },
+      };
     },
   });
   zoomHandler.attach(imageContainer);
@@ -773,10 +891,100 @@ export function showTryOnOverlay(
 
   closeButton.addEventListener('click', (e) => {
     e.stopPropagation();
+    // Anche ingrandita, la ✕ chiude la prova (Arou, 28/09: «per chiuderla con
+    // la x in alto non funziona»). Il 27/09 riportava solo al riquadro, e a
+    // chi voleva chiudere sembrava rotta: per rimpicciolire ci sono ⤡, Esc e
+    // il fondale. `removeTryOnOverlay` esce prima dall'ingrandita da sé.
     onClose();
   });
 
   imageContainer.appendChild(closeButton);
+
+  // ── Ingrandisci (Arou, 27/09: «il box dell'immagine è piccolo») ────────
+  // Inline il riquadro lo decide il tema (su Completo 366×457 su uno schermo
+  // largo 1920), e il widget non può allargare la colonna di un tema altrui.
+  // ⤢ porta LO STESSO overlay a tutto schermo e ⤡, ✕, Esc o il fondale lo
+  // riportano nel riquadro: si sposta l'elemento, non si rifà la prova, così
+  // confronto, capo scelto e risultato restano quelli.
+  let ingrandita = false;
+  const stileOverlayInline = overlay.style.cssText;
+  const stileRiquadroInline = imageContainer.style.cssText;
+  const misuraIngrandita = (): void => {
+    const img = imagesWrapper.querySelector('img');
+    const foto = img && img.naturalWidth ? img.naturalWidth / img.naturalHeight : 1360 / 2048;
+    // Almeno 3:4 (Arou, 27/09: «aumenta un po' il box in larghezza»): la prova
+    // è 2:3 e a misura di foto il riquadro sembrava una striscia. Più largo
+    // della foto lascia due bande ai lati, meglio che tagliare testa o piedi.
+    const r = Math.max(foto, RAPPORTO_MIN_INGRANDITA);
+    const h = Math.min(window.innerHeight * 0.9, (window.innerWidth * 0.9) / r);
+    imageContainer.style.width = `${Math.round(h * r)}px`;
+    imageContainer.style.height = `${Math.round(h)}px`;
+  };
+  const escIngrandita = (e: KeyboardEvent): void => {
+    if (e.key !== 'Escape') return;
+    // In cattura, prima del listener che chiude tutta la prova.
+    e.stopPropagation();
+    impostaIngrandita(false);
+  };
+  const fondaleIngrandita = (e: MouseEvent): void => {
+    if (e.target === overlay) impostaIngrandita(false);
+  };
+  const ingrandisci = document.createElement('button');
+  function impostaIngrandita(si: boolean): void {
+    if (!stage || si === ingrandita) return;
+    ingrandita = si;
+    zoomHandler?.reset();
+    if (si) {
+      overlay.style.cssText = `${stileOverlayInline};position:fixed;inset:0;z-index:2147483645;background:rgba(0,0,0,0.55);align-items:center;justify-content:center`;
+      imageContainer.style.cssText = `${stileRiquadroInline};max-width:none;max-height:none;border-radius:12px;box-shadow:0 12px 48px rgba(0,0,0,0.55);background:#1a1a1a`;
+      misuraIngrandita();
+      // Nel body, non nello stage: un antenato con `transform` farebbe da
+      // riferimento al `position:fixed` e la «pagina intera» sarebbe la colonna.
+      document.body.appendChild(overlay);
+      window.addEventListener('resize', misuraIngrandita);
+      document.addEventListener('keydown', escIngrandita, true);
+      overlay.addEventListener('click', fondaleIngrandita);
+    } else {
+      overlay.style.cssText = stileOverlayInline;
+      imageContainer.style.cssText = stileRiquadroInline;
+      stage.appendChild(overlay);
+      window.removeEventListener('resize', misuraIngrandita);
+      document.removeEventListener('keydown', escIngrandita, true);
+      overlay.removeEventListener('click', fondaleIngrandita);
+    }
+    ingrandisci.textContent = si ? '⤡' : '⤢';
+    const etichetta = si
+      ? getLocaleStringDefault('tryon.shrink', 'Back to the page')
+      : getLocaleStringDefault('tryon.enlarge', 'Enlarge');
+    ingrandisci.setAttribute('aria-label', etichetta);
+    ingrandisci.title = etichetta;
+  }
+  if (stage) {
+    ingrandisci.setAttribute('data-cabina-tryon-enlarge', '');
+    ingrandisci.textContent = '⤢';
+    const etichetta = getLocaleStringDefault('tryon.enlarge', 'Enlarge');
+    ingrandisci.setAttribute('aria-label', etichetta);
+    ingrandisci.title = etichetta;
+    // In basso a destra: gli angoli in alto sono di ← e ✕, il centro in alto
+    // dell'etichetta del confronto.
+    // Proprietà, non testo: il browser riscrive cssText («top: 12px», con lo
+    // spazio) e un replace sul testo lasciava ⤢ sopra la ✕ (visto il 27/09).
+    ingrandisci.style.cssText = closeButton.style.cssText;
+    ingrandisci.style.top = 'auto';
+    ingrandisci.style.bottom = '12px';
+    ingrandisci.addEventListener('click', (e) => {
+      e.stopPropagation();
+      impostaIngrandita(!ingrandita);
+    });
+    imageContainer.appendChild(ingrandisci);
+    // Se la prova si chiude da ingrandita (← , una nuova prova), i listener
+    // non devono restare: Esc resterebbe catturato e riaggancerebbe allo stage
+    // un overlay già tolto.
+    (overlay as unknown as Record<string, unknown>).__esciIngrandita = () => {
+      window.removeEventListener('resize', misuraIngrandita);
+      document.removeEventListener('keydown', escIngrandita, true);
+    };
+  }
 
   // ── Bottone indietro (← in alto a sinistra, simmetrico al chiudi) ─────
   // Story 12.5 (Task 2.4): torna allo step "Cosa provi" preservando il
@@ -856,10 +1064,39 @@ export function showTryOnOverlay(
   (overlay as unknown as Record<string, unknown>).__escHandler = escHandler;
 
   overlay.appendChild(imageContainer);
-  // Fix (code review 12.4): bottomBar era costruita ma mai montata nel DOM —
-  // sibling di imageContainer (non figlio) per restare immune a zoom/pan.
-  if (bottomBar) overlay.appendChild(bottomBar);
   (stage ?? document.body).appendChild(overlay);
+  // Fix (code review 12.4): bottomBar era costruita ma mai montata nel DOM —
+  // fuori da imageContainer per restare immune a zoom/pan. Dal 24/09 sta in
+  // flusso (vedi il suo cssText): inline nello slot della taglia, dove
+  // `mountSizeBadge` le mette il badge DAVANTI; a tutto schermo sotto il
+  // riquadro. Lo slot è fuori dall'overlay: `removeTryOnOverlay` la toglie a parte.
+  if (bottomBar) {
+    const slot = inline
+      ? (document.querySelector<HTMLElement>(`[${SIZE_HOST_ATTR}]`) ?? creaSizeHostSottoIlPulsante())
+      : null;
+    (slot ?? overlay).appendChild(bottomBar);
+    bottomBarElement = bottomBar;
+    if (!inline && typeof ResizeObserver !== 'undefined') {
+      // Il riquadro era limitato a 90vh; ora quel 90vh se lo dividono lui e la
+      // barra, che cambia altezza quando arriva il pannello del look.
+      const barra = bottomBar;
+      barraObserver = new ResizeObserver(() => {
+        const maxH = Math.max(120, overlay.clientHeight * 0.9 - barra.offsetHeight - SPAZIO_BARRA);
+        overlay
+          .querySelectorAll<HTMLElement>(
+            '[data-cabina-tryon-image-container],[data-cabina-tryon-sizer],[data-cabina-tryon-image]',
+          )
+          .forEach((el) => {
+            el.style.maxHeight = `${maxH}px`;
+          });
+        // Larga quanto il riquadro, che ha la sua misura solo a immagine caricata.
+        if (imageContainer.offsetWidth) barra.style.width = `${imageContainer.offsetWidth}px`;
+      });
+      barraObserver.observe(overlay);
+      barraObserver.observe(bottomBar);
+      barraObserver.observe(imageContainer);
+    }
+  }
 
   // Inietta animazione CSS se non già presente
   if (!document.getElementById('cabina-tryon-styles')) {
@@ -908,6 +1145,7 @@ export function removeTryOnOverlay(): void {
     if (handler) {
       document.removeEventListener('keydown', handler);
     }
+    ((overlayElement as unknown as Record<string, unknown>).__esciIngrandita as (() => void) | undefined)?.();
 
     // Rimuovi rotation e zoom handler
     if (rotationHandler) {
@@ -923,6 +1161,11 @@ export function removeTryOnOverlay(): void {
     // dall'overlay: `overlay.remove()` non se lo porta dietro e resterebbe in
     // pagina una taglia consigliata orfana, senza più la prova che la spiega.
     removeSizeBadge();
+    // Stessa sorte per la barra delle azioni, che inline sta nello stesso slot.
+    bottomBarElement?.remove();
+    bottomBarElement = null;
+    barraObserver?.disconnect();
+    barraObserver = null;
 
     overlayElement.remove();
     overlayElement = null;

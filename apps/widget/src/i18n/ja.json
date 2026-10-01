@@ -19,7 +19,7 @@
     "quality_optimal": "最適",
     "quality_sufficient": "十分",
     "quality_low": "低い",
-    "consent_text": "私の写真を外部のAIサービス（試着画像の生成にPrunaAI〈米国〉、サイズの推定と結果の衣服が正しいかの確認にNovita AI〈米国〉）に送信することに同意し、{termini}および{privacy}に同意します。",
+    "consent_text": "私の写真を外部のAIサービス（試着画像の生成にPrunaAI〈米国〉、サイズの推定と結果の衣服が正しいかの確認にVercel AI Gateway〈米国、Microsoft Azure上で動くOpenAIのモデル〉）に送信することに同意し、{termini}および{privacy}に同意します。また、私は18歳以上であることを確認します。",
     "consent_terms_label": "利用規約",
     "consent_privacy_label": "プライバシーポリシー",
     "consent_required": "写真をアップロードするには、利用規約とプライバシーポリシーに同意してください"
@@ -61,7 +61,9 @@
   },
   "tryon": {
     "close": "閉じる",
-    "rotate_hint": "ドラッグして回転"
+    "rotate_hint": "ドラッグして回転",
+    "enlarge": "拡大する",
+    "shrink": "ページに戻る"
   },
   "size": {
     "recommended": "おすすめのサイズ",
@@ -70,7 +72,9 @@
     "between": "{{size1}}と{{size2}}の間です — ゆとりを持たせるため{{recommended}}をおすすめします",
     "confidence_score": "信頼度 {{score}}%",
     "between_smaller": "{{size1}}と{{size2}}の間です — {{recommended}}をおすすめします",
-    "comfort_hint": "ゆったりめ：{{size}} · ご自分に合うと思うサイズを選んでください"
+    "comfort_hint": "ゆったりめ：{{size}} · ご自分に合うと思うサイズを選んでください",
+    "choose": "{{size}}を選ぶ",
+    "chosen": "{{size}}を選択済み ✓"
   },
   "browser": {
     "unsupported_title": "Cabinaをご利用いただくにはブラウザを更新してください",
@@ -121,6 +125,9 @@
     "outfit_label": "コーデを完成させる",
     "outfit_try": "一緒に試着",
     "outfit_loading": "コーデを準備しています…",
-    "outfit_error": "コーデを作成できませんでした。もう一度お試しください"
+    "outfit_error": "コーデを作成できませんでした。もう一度お試しください",
+    "adding_to_cart": "追加中…",
+    "added_to_cart": "カートに追加しました ✓ · カートを見る",
+    "add_to_cart_failed": "確認できませんでした · カートを確認"
   }
 }

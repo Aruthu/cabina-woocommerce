@@ -19,7 +19,7 @@
     "quality_optimal": "Ótima",
     "quality_sufficient": "Suficiente",
     "quality_low": "Baixa",
-    "consent_text": "Concordo com o envio da minha foto para serviços externos de inteligência artificial — PrunaAI (Estados Unidos) para gerar a prova, e Novita AI (Estados Unidos) para estimar as medidas e verificar se a peça no resultado é a verdadeira — e aceito {termini} e {privacy}.",
+    "consent_text": "Concordo com o envio da minha foto para serviços externos de inteligência artificial — PrunaAI (Estados Unidos) para gerar a prova, e Vercel AI Gateway (Estados Unidos; um modelo da OpenAI hospedado na Microsoft Azure) para estimar as medidas e verificar se a peça no resultado é a verdadeira — e aceito {termini} e {privacy}. Confirmo que tenho pelo menos 18 anos.",
     "consent_terms_label": "Termos e condições",
     "consent_privacy_label": "Política de privacidade",
     "consent_required": "Aceite os termos e condições e a política de privacidade para enviar sua foto"
@@ -61,7 +61,9 @@
   },
   "tryon": {
     "close": "Fechar",
-    "rotate_hint": "Arraste para girar"
+    "rotate_hint": "Arraste para girar",
+    "enlarge": "Ampliar",
+    "shrink": "Voltar à página"
   },
   "size": {
     "recommended": "Tamanho recomendado",
@@ -70,7 +72,9 @@
     "between": "Entre {{size1}} e {{size2}} — recomendamos {{recommended}} para mais conforto",
     "confidence_score": "{{score}}% de confiabilidade",
     "between_smaller": "Entre {{size1}} e {{size2}} — recomendamos {{recommended}}",
-    "comfort_hint": "Mais folgado: {{size}} · escolha o número que achar certo"
+    "comfort_hint": "Mais folgado: {{size}} · escolha o número que achar certo",
+    "choose": "Escolher {{size}}",
+    "chosen": "{{size}} selecionado ✓"
   },
   "browser": {
     "unsupported_title": "Atualize seu navegador para usar a Cabina",
@@ -121,6 +125,9 @@
     "outfit_label": "Complete o look",
     "outfit_try": "Provar juntas",
     "outfit_loading": "Montando o look…",
-    "outfit_error": "O look não deu certo, tente novamente"
+    "outfit_error": "O look não deu certo, tente novamente",
+    "adding_to_cart": "Adicionando…",
+    "added_to_cart": "Adicionado ao carrinho ✓ · Ver carrinho",
+    "add_to_cart_failed": "Não confirmado · Confira o carrinho"
   }
 }

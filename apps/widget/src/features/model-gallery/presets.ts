@@ -28,6 +28,13 @@
  * `asset_cdn.py` nella stessa cartella. Tutte e 40 sono a **1360×2048**: il try-on
  * di Pruna restituisce la risoluzione della modella, quindi è lei a decidere se il
  * risultato è 2K (le 8 di luglio sono state ingrandite dal 768 originale).
+ *
+ * 2026-09-27 (Arou): la prima schermata mostra le **26–35 native**, non più le 8
+ * di luglio. L'ingrandimento aveva lasciato nella foto una trama a vermicelli
+ * (pavimento, jeans) che Pruna ricopia fedelmente: a zoom 3× la prova sembrava
+ * rovinata. Misurato con un PNG senza perdita: non era la compressione. I file
+ * di luglio restano in `src/models/` (`MODELLE_DI_LUGLIO`) perché i widget dentro
+ * i plugin (WooCommerce, PrestaShop) li chiedono ancora per id.
  */
 
 /** Corporature eterogenee del set (AC2: "small but clearly heterogeneous"). */
@@ -89,15 +96,19 @@ function preset(gender: ModelGender, bodyType: BodyType, labelKey: string, ageBa
  * applicarlo a un uomo sarebbe una traduzione sciatta, non una scorciatoia.
  */
 export const PRESET_MODELS: readonly PresetModel[] = [
-  preset('female', 'slim', 'model_gallery.body_slim'),
-  preset('female', 'regular', 'model_gallery.body_regular'),
-  preset('female', 'curvy', 'model_gallery.body_curvy'),
-  preset('female', 'plus', 'model_gallery.body_plus'),
-  preset('male', 'slim', 'model_gallery.body_slim'),
-  preset('male', 'regular', 'model_gallery.body_regular'),
-  preset('male', 'curvy', 'model_gallery.body_curvy_male'),
-  preset('male', 'plus', 'model_gallery.body_plus'),
+  preset('female', 'slim', 'model_gallery.body_slim', '26-35'),
+  preset('female', 'regular', 'model_gallery.body_regular', '26-35'),
+  preset('female', 'curvy', 'model_gallery.body_curvy', '26-35'),
+  preset('female', 'plus', 'model_gallery.body_plus', '26-35'),
+  preset('male', 'slim', 'model_gallery.body_slim', '26-35'),
+  preset('male', 'regular', 'model_gallery.body_regular', '26-35'),
+  preset('male', 'curvy', 'model_gallery.body_curvy_male', '26-35'),
+  preset('male', 'plus', 'model_gallery.body_plus', '26-35'),
 ];
+
+/** Le 8 di luglio, ingrandite: il widget non le mostra più (27/09), ma i file
+ *  restano serviti per i widget dentro i plugin, che le chiedono per id. */
+export const MODELLE_DI_LUGLIO: readonly string[] = PRESET_MODELS.map((m) => `${m.gender}-${m.bodyType}`);
 
 /**
  * Le 32 della seconda schermata: genere × fascia × corporatura, stesse etichette
@@ -110,8 +121,9 @@ export const MORE_MODELS: readonly PresetModel[] = PRESET_MODELS.flatMap((base) 
   a.gender.localeCompare(b.gender) || a.ageBand!.localeCompare(b.ageBand!),
 );
 
-/** Tutte e 40, per risolvere un `id` qualunque (miniature, selezione). */
-export const ALL_MODELS: readonly PresetModel[] = [...PRESET_MODELS, ...MORE_MODELS];
+/** Tutte le modelle del widget, per risolvere un `id` (miniature, selezione).
+ *  Le 32: la prima schermata ne è un sottoinsieme (le 26–35) dal 27/09. */
+export const ALL_MODELS: readonly PresetModel[] = MORE_MODELS;
 
 /** «26-35» → «26–35»: il trattino lungo è quello tipografico degli intervalli. */
 export function ageBandLabel(band: AgeBand): string {

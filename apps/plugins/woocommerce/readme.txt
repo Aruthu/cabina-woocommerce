@@ -5,7 +5,7 @@ Requires at least: 6.5
 Requires Plugins: woocommerce
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 1.2.0
+Stable tag: 1.2.1
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -105,6 +105,12 @@ Yes. The plugin uses standard WooCommerce hooks. If your theme does not support 
 4. The Cabina Dashboard, where you customize the widget
 
 == Changelog ==
+
+= 1.2.1 =
+
+* Widget updated to the current release: the shopper picks the size and "Add to cart" confirms the outcome, the try-on follows the selected variant, the action bar sits below the result, the recommended size is shown in green, zoom towards the tapped point with panning inside the photo, the close button also closes an enlarged try-on, and a smaller photo upload box
+* Try-on photos are brought to 2048 px on the long side when the browser allows it
+* Photo consent updated: the external provider that estimates measurements has changed, so shoppers who had already accepted are asked once more
 
 = 1.2.0 =
 
