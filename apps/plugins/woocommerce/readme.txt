@@ -1,6 +1,6 @@
 === Cabina — Virtual Try-On for WooCommerce ===
 Contributors: actry
-Tags: virtual try-on, fitting room, woocommerce, apparel, size recommendation
+Tags: virtual try-on, try on, fitting room, size recommendation, woocommerce
 Requires at least: 6.5
 Requires Plugins: woocommerce
 Tested up to: 7.1
@@ -9,19 +9,25 @@ Stable tag: 1.2.1
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
-Add a "Try it on" button to your WooCommerce product pages: customers try garments on their own photo, no app required.
+AI virtual try-on for WooCommerce: shoppers see your clothes on their own photo and get their size from your size chart. Free plan.
 
 == Description ==
 
-Cabina turns your WooCommerce store into a virtual fitting room. Your customers can:
+Cabina is an AI virtual try-on and size recommendation plugin for WooCommerce. It adds a "Try it on" button to your product pages and turns your store into a virtual fitting room: shoppers see your garment on their own body before they buy, and get the size to order from your own size chart.
 
-* **Virtually try on** garments using their own photo
+With the virtual try-on, your customers can:
+
+* **Try on your garments virtually** using their own photo, or on one of 40 preset models
 * **See themselves wearing the garment** in a photorealistic AI-generated image
 * **Try up to three garments together** — a full outfit in one image
-* **Get a size recommendation** based on their real measurements, with a fit preference (fitted, regular, relaxed)
+* **Get a size recommendation** based on their measurements and on your size chart, with a fit preference (fitted, regular, relaxed)
 * **Rotate and zoom** to see every detail
 
-**Zero code required.** Install, paste your API key, and the try-on button appears automatically on your product pages.
+**Zero code required.** Install, paste your API key, and the virtual try-on button appears automatically on your WooCommerce product pages.
+
+= Virtual try-on and size recommendation, together =
+
+The virtual try-on shows how the garment looks on the shopper; the size recommendation tells them which size to order. Cabina reads the size chart you enter in the Cabina Dashboard, in centimetres, and compares it with the shopper's measurements: a customer who is between two sizes gets the answer before adding to cart. The size recommendation also works without a photo, from height and weight.
 
 = How it works =
 
@@ -35,7 +41,9 @@ Cabina turns your WooCommerce store into a virtual fitting room. Your customers 
 
 * **Increase conversion** — Customers who try on virtually buy more
 * **Reduce returns** — Size recommendations cut returns caused by wrong sizes
-* **Nothing for shoppers to install** — Runs directly in the customer's browser, mobile included
+* **Nothing for shoppers to install** — The virtual fitting room runs directly in the customer's browser, mobile included
+* **Free plan** — Start free, with no credit card; paid plans for stores that need more try-ons
+* **8 languages** — The widget speaks Italian, English, French, Spanish, German, Japanese, Brazilian Portuguese and Indonesian
 * **No external code** — The widget script ships inside the plugin and is served from your own site; the try-on, the widget configuration, its translations and the model photos come from Cabina's API
 * **Privacy and consent** — Nothing leaves the customer's device without explicit, revocable consent. With consent, the photo is sent to external AI providers to estimate measurements and generate the try-on image; the estimated measurements are not stored, and the generated image is kept for at most 7 days
 
@@ -80,6 +88,10 @@ The build writes `apps/plugins/woocommerce/assets/widget.iife.js`, byte-identica
 = Is WooCommerce required? =
 
 Yes. Cabina integrates with WooCommerce product page hooks. If WooCommerce is not active, the plugin shows a notice and the widget is not injected.
+
+= Is the virtual try-on free? =
+
+The plugin is free, and Cabina has a free plan you can start without a credit card. Paid plans, for stores that need more try-ons, are listed at https://cabina.io.
 
 = Can I customize the widget's appearance? =
 
