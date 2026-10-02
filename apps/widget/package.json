@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build && node ../../scripts/generate-sri.mjs dist/widget.iife.js --write",
-    "build:plugin": "tsc --noEmit && vite build --minify false --outDir ../plugins/woocommerce/assets",
+    "build:plugin": "tsc --noEmit && vite build --minify false --outDir ../plugins/woocommerce/assets && node -e \"const fs=require('fs'),d='../plugins/prestashop/views/js';if(fs.existsSync(d)){fs.copyFileSync('../plugins/woocommerce/assets/widget.iife.js',d+'/widget.iife.js');console.log('PrestaShop: bundle copiato')}else console.log('PrestaShop: cartella assente (mirror pubblico), copia saltata')\"",
     "lint": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
