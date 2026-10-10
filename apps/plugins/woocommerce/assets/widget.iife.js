@@ -3589,7 +3589,7 @@
   objectType({
     apiKey: stringType().min(1),
     primaryColor: stringType().regex(/^#[0-9A-Fa-f]{6}$/),
-    buttonText: stringType().min(1).max(30),
+    buttonText: stringType().max(30),
     enabledCategories: arrayType(stringType()),
     defaultLanguage: enumType(WIDGET_LANGUAGES).default("en")
   });
@@ -5469,10 +5469,10 @@
     preset("female", "regular", "model_gallery.body_regular", "26-35"),
     preset("female", "curvy", "model_gallery.body_curvy", "26-35"),
     preset("female", "plus", "model_gallery.body_plus", "26-35"),
-    preset("male", "slim", "model_gallery.body_slim", "26-35"),
-    preset("male", "regular", "model_gallery.body_regular", "26-35"),
+    preset("male", "slim", "model_gallery.body_slim_male", "26-35"),
+    preset("male", "regular", "model_gallery.body_regular_male", "26-35"),
     preset("male", "curvy", "model_gallery.body_curvy_male", "26-35"),
-    preset("male", "plus", "model_gallery.body_plus", "26-35")
+    preset("male", "plus", "model_gallery.body_plus_male", "26-35")
   ];
   PRESET_MODELS.map((m) => `${m.gender}-${m.bodyType}`);
   const MORE_MODELS = PRESET_MODELS.flatMap(
@@ -7764,6 +7764,42 @@
       candidates: candidate.length
     };
   }
+  const CAMPO_ATTRIBUZIONE = "properties[_cabina]";
+  let ultimaSessione = null;
+  function suShopify() {
+    return typeof window !== "undefined" && "Shopify" in window;
+  }
+  function formAcquisto() {
+    const vicino = document.querySelector("[data-cabina-widget-btn]")?.closest("form");
+    if (vicino) return vicino;
+    const delTema = trovaPulsanteAcquisto()?.closest("form");
+    if (delTema) return delTema;
+    const candidati = document.querySelectorAll('form[action*="/cart/add"]');
+    return candidati.length === 1 ? candidati[0] : null;
+  }
+  function attribuzioneDaRimettere() {
+    if (!ultimaSessione || !suShopify()) return false;
+    const form = formAcquisto();
+    return form !== null && !form.querySelector(`input[name="${CAMPO_ATTRIBUZIONE}"]`);
+  }
+  function segnaProvaNelForm(sessionId) {
+    if (!sessionId || !suShopify()) return false;
+    ultimaSessione = sessionId;
+    const form = formAcquisto();
+    if (!form) return false;
+    let campo = form.querySelector(`input[name="${CAMPO_ATTRIBUZIONE}"]`);
+    if (!campo) {
+      campo = document.createElement("input");
+      campo.type = "hidden";
+      campo.name = CAMPO_ATTRIBUZIONE;
+      form.appendChild(campo);
+    }
+    campo.value = sessionId;
+    return true;
+  }
+  function rimettiAttribuzione() {
+    if (ultimaSessione) segnaProvaNelForm(ultimaSessione);
+  }
   function senzaChiave(valore) {
     return valore.startsWith("form.") ? void 0 : valore;
   }
@@ -7942,6 +7978,11 @@
         "padding:24px",
         "max-width:400px",
         "width:90%",
+        // Senza tetto, su finestre basse (~890 px) il primo passaggio supera
+        // l'altezza: centrato, sborda sopra e sotto, e la parte alta resta
+        // irraggiungibile perché l'overlay fixed non scorre. Come su mobile.
+        "max-height:90vh",
+        "overflow-y:auto",
         "box-shadow:0 4px 24px rgba(0,0,0,0.15)",
         "position:relative"
       ].join(";");
@@ -8430,6 +8471,8 @@
           sessionCompleteSent = true;
           notifySessionComplete(currentApiKey, widgetContext.baseUrl ?? "", currentSessionId);
         }
+        const capoDellaPagina = !widgetContext.selectedGarments || widgetContext.selectedGarments.some((g) => g.imageUrl === extractProductImageUrl());
+        if (capoDellaPagina) segnaProvaNelForm(currentSessionId);
         const apiKeyForCalc = currentApiKey;
         const baseUrlForCalc = widgetContext.baseUrl ?? "";
         showTryOnOverlay(
@@ -8500,6 +8543,7 @@
   function sorvegliaBottone(config) {
     if (osservatoreBottone || typeof MutationObserver === "undefined") return;
     const osservatore = new MutationObserver(() => {
+      if (attribuzioneDaRimettere()) rimettiAttribuzione();
       if (timerReinserimento || !bottoneIniettato || bottoneIniettato.isConnected) return;
       timerReinserimento = setTimeout(() => {
         timerReinserimento = null;
@@ -8534,7 +8578,7 @@
     const container = explicitTarget ?? anchor?.parentElement ?? document.body;
     const button = document.createElement("button");
     button.type = "button";
-    button.textContent = config.buttonText;
+    button.textContent = config.buttonText || getLocaleStringDefault("common.try_on", "Try it on");
     button.setAttribute("data-cabina-widget-btn", "");
     button.style.cssText = [
       `background-color:${sanitizeColor(config.primaryColor)}`,
@@ -8578,6 +8622,7 @@
       button.style.boxSizing = "border-box";
     }
     bottoneIniettato = button;
+    rimettiAttribuzione();
     sorvegliaBottone(config);
   }
   async function initWidget(apiKey2, baseUrl = "") {

@@ -1,6 +1,7 @@
 {
   "common": {
-    "back": "Retour"
+    "back": "Retour",
+    "try_on": "Essayer sur soi"
   },
   "error": {
     "timeout": "Délai dépassé — réessayez",
@@ -91,10 +92,13 @@
     "gender_female": "Femme",
     "gender_male": "Homme",
     "body_slim": "Mince",
+    "body_slim_male": "Mince",
     "body_regular": "Standard",
+    "body_regular_male": "Standard",
     "body_curvy": "Ronde",
     "body_curvy_male": "Rond",
-    "body_plus": "Plus size",
+    "body_plus": "Grande taille",
+    "body_plus_male": "Grande taille",
     "more_button": "Plus de mannequins : âge et morphologie",
     "more_title": "Tous les mannequins",
     "more_subtitle": "Choisissez selon l'âge et la morphologie — aucune photo requise",

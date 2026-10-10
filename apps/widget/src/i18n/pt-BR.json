@@ -1,6 +1,7 @@
 {
   "common": {
-    "back": "Voltar"
+    "back": "Voltar",
+    "try_on": "Experimente em você"
   },
   "error": {
     "timeout": "Tempo esgotado — tente novamente",
@@ -90,11 +91,14 @@
     "subtitle": "Prove a peça em uma pessoa com o seu tipo de corpo — nenhuma foto necessária",
     "gender_female": "Mulher",
     "gender_male": "Homem",
-    "body_slim": "Slim",
-    "body_regular": "Regular",
-    "body_curvy": "Curvy",
+    "body_slim": "Magra",
+    "body_slim_male": "Magro",
+    "body_regular": "Normal",
+    "body_regular_male": "Normal",
+    "body_curvy": "Curvilínea",
     "body_curvy_male": "Robusto",
-    "body_plus": "Plus",
+    "body_plus": "Plus size",
+    "body_plus_male": "Plus size",
     "more_button": "Mais modelos: idade e tipo de corpo",
     "more_title": "Todos os modelos",
     "more_subtitle": "Escolha por idade e tipo de corpo — nenhuma foto necessária",

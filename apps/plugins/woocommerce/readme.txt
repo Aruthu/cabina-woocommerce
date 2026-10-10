@@ -5,7 +5,7 @@ Requires at least: 6.5
 Requires Plugins: woocommerce
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 1.2.1
+Stable tag: 1.2.2
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -117,6 +117,10 @@ Yes. The plugin uses standard WooCommerce hooks. If your theme does not support 
 4. The Cabina Dashboard, where you customize the widget
 
 == Changelog ==
+
+= 1.2.2 =
+
+* Widget updated to the current release: the try-on button and the body-type labels follow the language of the product page, the gallery labels are complete in Italian, and the desktop window no longer gets cut off at the top on short screens
 
 = 1.2.1 =
 

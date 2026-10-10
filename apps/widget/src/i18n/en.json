@@ -1,6 +1,7 @@
 {
   "common": {
-    "back": "Back"
+    "back": "Back",
+    "try_on": "Try it on"
   },
   "error": {
     "timeout": "Request timed out — try again",
@@ -91,10 +92,13 @@
     "gender_female": "Women",
     "gender_male": "Men",
     "body_slim": "Slim",
+    "body_slim_male": "Slim",
     "body_regular": "Regular",
+    "body_regular_male": "Regular",
     "body_curvy": "Curvy",
     "body_curvy_male": "Broad",
     "body_plus": "Plus",
+    "body_plus_male": "Plus",
     "more_button": "More models: age and body type",
     "more_title": "All models",
     "more_subtitle": "Choose by age and body type — no photo needed",

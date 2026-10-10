@@ -1,6 +1,7 @@
 {
   "common": {
-    "back": "Indietro"
+    "back": "Indietro",
+    "try_on": "Prova su di te"
   },
   "error": {
     "timeout": "Tempo scaduto — riprova",
@@ -90,13 +91,16 @@
     "subtitle": "Prova il capo su una persona con la tua corporatura — nessuna foto necessaria",
     "gender_female": "Donna",
     "gender_male": "Uomo",
-    "body_slim": "Slim",
-    "body_regular": "Regular",
-    "body_curvy": "Curvy",
+    "body_slim": "Snella",
+    "body_slim_male": "Snello",
+    "body_regular": "Normale",
+    "body_regular_male": "Normale",
+    "body_curvy": "Formosa",
     "body_curvy_male": "Robusto",
     "body_plus": "Plus",
-    "more_button": "Altre modelle: età e corporature",
-    "more_title": "Tutte le modelle",
+    "body_plus_male": "Plus",
+    "more_button": "Altri modelli: età e corporatura",
+    "more_title": "Tutti i modelli",
     "more_subtitle": "Scegli per età e corporatura — nessuna foto necessaria",
     "load_error": "Impossibile caricare il modello, riprova o usa la tua foto"
   },

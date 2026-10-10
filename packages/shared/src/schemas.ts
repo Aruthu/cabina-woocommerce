@@ -25,7 +25,7 @@ export const MeasuresSchema = z.object({
 export const WidgetConfigSchema = z.object({
   apiKey: z.string().min(1),
   primaryColor: z.string().regex(/^#[0-9A-Fa-f]{6}$/),
-  buttonText: z.string().min(1).max(30),
+  buttonText: z.string().max(30),
   enabledCategories: z.array(z.string()),
   defaultLanguage: z.enum(WIDGET_LANGUAGES).default('en'),
 });

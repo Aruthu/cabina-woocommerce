@@ -4,6 +4,7 @@ export type SupportedLanguage = WidgetLanguage;
 
 export interface WidgetPublicConfig {
   primaryColor: string;
+  /** Vuoto = il widget usa il proprio dizionario nella lingua della pagina. */
   buttonText: string;
   enabledCategories: string[];
   defaultLanguage: WidgetLanguage;

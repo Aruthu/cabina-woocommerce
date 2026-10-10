@@ -1,6 +1,7 @@
 {
   "common": {
-    "back": "Atrás"
+    "back": "Atrás",
+    "try_on": "Pruébatelo"
   },
   "error": {
     "timeout": "Tiempo de espera agotado — inténtalo de nuevo",
@@ -90,11 +91,14 @@
     "subtitle": "Prueba la prenda en una persona de complexión similar — no necesitas foto",
     "gender_female": "Mujer",
     "gender_male": "Hombre",
-    "body_slim": "Slim",
-    "body_regular": "Regular",
-    "body_curvy": "Curvy",
+    "body_slim": "Delgada",
+    "body_slim_male": "Delgado",
+    "body_regular": "Normal",
+    "body_regular_male": "Normal",
+    "body_curvy": "Con curvas",
     "body_curvy_male": "Robusto",
-    "body_plus": "Plus",
+    "body_plus": "Talla grande",
+    "body_plus_male": "Talla grande",
     "more_button": "Más modelos: edad y complexión",
     "more_title": "Todos los modelos",
     "more_subtitle": "Elige por edad y complexión — no necesitas foto",

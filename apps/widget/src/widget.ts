@@ -1,7 +1,7 @@
 import { fetchWidgetConfig, notifySessionStart, notifySessionComplete, estimateMeasuresFromPhoto, analyzeGarmentFromUrl, fetchCatalog, tryonGenerative, sendConsentEvent, type CatalogData, type TryonIdentity } from './api/widget-api';
 import type { SelectedGarment } from './state/types';
 import type { FashnGarmentCategory } from '@cabina/shared';
-import { resolveLanguage, loadLocale, getLocaleString, getLocaleStringOr, getCurrentLanguage } from './i18n/i18n';
+import { resolveLanguage, loadLocale, getLocaleString, getLocaleStringOr, getLocaleStringDefault, getCurrentLanguage } from './i18n/i18n';
 import { widgetReducer, createInitialContext, resetSessionContext } from './state/machine';
 import { isBrowserSupported, getBrowserUpdateLink } from './utils/browser';
 import { caricaImmaginiVarianti, extractProductImageUrl } from './utils/product-image';
@@ -22,6 +22,12 @@ import { createGarmentSelect, resolvePageGarmentParams, type PageGarmentParams }
 import { showTryOnOverlay, removeTryOnOverlay, updateSizeBadge, setShowSizeScore } from './features/tryon/tryon-overlay';
 import { recommendFromTables, stimaPiedeDaAltezza } from './features/size/size-recommendation';
 import { fetchSizeTables } from './api/widget-api';
+import {
+  segnaProvaNelForm,
+  rimettiAttribuzione,
+  attribuzioneDaRimettere,
+  __resetAttribuzioneForTesting,
+} from './features/reveal-result/attribuzione-ordine';
 import type { WidgetLanguage, WidgetPublicConfig, Measures } from '@cabina/shared';
 import { BUTTON_ANCHORS, BUTTON_TARGET_ATTR, AUTO_OPEN_PARAM, AUTO_OPEN_VALUE } from '@cabina/shared';
 import type { GarmentAnalysis, GarmentCategory } from './state/types';
@@ -97,6 +103,7 @@ export function __resetWidgetForTesting(): void {
   bottoneIniettato = null;
   if (timerReinserimento) clearTimeout(timerReinserimento);
   timerReinserimento = null;
+  __resetAttribuzioneForTesting();
 }
 let currentLang: WidgetLanguage | null = null;
 let currentApiKey: string | null = null;
@@ -333,6 +340,11 @@ function ensureWidgetModal(onClose?: () => void): HTMLElement {
       'padding:24px',
       'max-width:400px',
       'width:90%',
+      // Senza tetto, su finestre basse (~890 px) il primo passaggio supera
+      // l'altezza: centrato, sborda sopra e sotto, e la parte alta resta
+      // irraggiungibile perché l'overlay fixed non scorre. Come su mobile.
+      'max-height:90vh',
+      'overflow-y:auto',
       'box-shadow:0 4px 24px rgba(0,0,0,0.15)',
       'position:relative',
     ].join(';');
@@ -1038,6 +1050,18 @@ function renderState(button: HTMLElement): void {
         sessionCompleteSent = true;
         notifySessionComplete(currentApiKey, widgetContext.baseUrl ?? '', currentSessionId);
       }
+      // Story 14.1: da qui in poi il capo che finisce nel carrello porta l'id
+      // della prova (`properties[_cabina]`), da qualunque pulsante. Idempotente:
+      // a ogni ritorno sul risultato riscrive lo stesso valore. Con
+      // `currentSessionId` ancora nullo (avvio della sessione non arrivato) non
+      // c'è niente da attribuire, e l'ordine resterà «senza prova».
+      // Solo se fra i capi provati c'è QUELLO DELLA PAGINA (review Opus 07/10):
+      // una prova fatta con un capo del catalogo o un outfit senza il capo
+      // della scheda non deve segnare «con prova» l'ordine di questa scheda.
+      const capoDellaPagina =
+        !widgetContext.selectedGarments ||
+        widgetContext.selectedGarments.some((g) => g.imageUrl === extractProductImageUrl());
+      if (capoDellaPagina) segnaProvaNelForm(currentSessionId);
 
       // Story 12.4 (fix code review, P1-P2): apiKey/baseUrl servono SIA al calcolo
       // taglia esistente SIA al nuovo apiContext dello slider (swap capo + report) —
@@ -1160,6 +1184,11 @@ function sorvegliaBottone(config: WidgetPublicConfig): void {
   // il buybox in qualunque momento (valuta, variante, carrello) e il pulsante
   // deve tornare ogni volta. Il costo per batch è un `isConnected`.
   const osservatore = new MutationObserver(() => {
+    // Story 14.1: il tema può ridisegnare il form SENZA toccare il nostro
+    // pulsante (che sta fuori dal form, o in un altro blocco): il campo
+    // `properties[_cabina]` sparirebbe e nessuno lo rimetterebbe (review
+    // Opus 07/10). Costa una `querySelector` per batch, solo dopo una prova.
+    if (attribuzioneDaRimettere()) rimettiAttribuzione();
     if (timerReinserimento || !bottoneIniettato || bottoneIniettato.isConnected) return;
     // Rimandato di un giro: un ridisegno a più passi potrebbe non aver ancora
     // rimesso il blocco d'acquisto, e reinserire subito finirebbe sul body
@@ -1220,7 +1249,11 @@ function injectButton(config: WidgetPublicConfig): void {
   // rotti. Scoperto dal banco degli screenshot (`cattura-screenshot-docs.mjs`),
   // cioè da qualcosa che il pulsante lo ha davvero premuto.
   button.type = 'button';
-  button.textContent = config.buttonText;
+  // Testo del negoziante se l'ha scritto; altrimenti il dizionario nella lingua
+  // della pagina (06/10/2026: prima un negozio in otto lingue aveva un solo testo).
+  // `getLocaleStringDefault`, non `getLocaleString`: un browser con il dizionario
+  // vecchio in cache (60 s) non deve leggere «common.try_on» sul pulsante (Kilo, #307).
+  button.textContent = config.buttonText || getLocaleStringDefault('common.try_on', 'Try it on');
   button.setAttribute('data-cabina-widget-btn', '');
   button.style.cssText = [
     `background-color:${sanitizeColor(config.primaryColor)}`,
@@ -1281,6 +1314,10 @@ function injectButton(config: WidgetPublicConfig): void {
   }
 
   bottoneIniettato = button;
+  // Story 14.1: il tema ha ridisegnato il blocco d'acquisto (è per questo che
+  // il pulsante è stato reinserito) e il campo `properties[_cabina]` è sparito
+  // con lui: va rimesso, se c'è stata una prova.
+  rimettiAttribuzione();
   sorvegliaBottone(config);
 }
 

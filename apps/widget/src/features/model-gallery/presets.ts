@@ -91,19 +91,19 @@ function preset(gender: ModelGender, bodyType: BodyType, labelKey: string, ageBa
  * Set di 8 modelle: 4 corporature (slim / regular / curvy / plus) per genere.
  * La galleria le raggruppa per genere e renderizza una miniatura per voce (Task 4.3).
  *
- * Le corporature femminili riusano le etichette neutre; il maschile ha una chiave
- * dedicata per `curvy`, che in italiano come in inglese è un termine femminile:
- * applicarlo a un uomo sarebbe una traduzione sciatta, non una scorciatoia.
+ * Ogni corporatura ha una chiave per genere (06/10/2026): in italiano, spagnolo e
+ * portoghese l'aggettivo si accorda («Snella» / «Snello»), e `curvy` è femminile
+ * anche in inglese. Dove la parola non cambia, le due chiavi hanno lo stesso testo.
  */
 export const PRESET_MODELS: readonly PresetModel[] = [
   preset('female', 'slim', 'model_gallery.body_slim', '26-35'),
   preset('female', 'regular', 'model_gallery.body_regular', '26-35'),
   preset('female', 'curvy', 'model_gallery.body_curvy', '26-35'),
   preset('female', 'plus', 'model_gallery.body_plus', '26-35'),
-  preset('male', 'slim', 'model_gallery.body_slim', '26-35'),
-  preset('male', 'regular', 'model_gallery.body_regular', '26-35'),
+  preset('male', 'slim', 'model_gallery.body_slim_male', '26-35'),
+  preset('male', 'regular', 'model_gallery.body_regular_male', '26-35'),
   preset('male', 'curvy', 'model_gallery.body_curvy_male', '26-35'),
-  preset('male', 'plus', 'model_gallery.body_plus', '26-35'),
+  preset('male', 'plus', 'model_gallery.body_plus_male', '26-35'),
 ];
 
 /** Le 8 di luglio, ingrandite: il widget non le mostra più (27/09), ma i file

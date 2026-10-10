@@ -1,6 +1,7 @@
 {
   "common": {
-    "back": "戻る"
+    "back": "戻る",
+    "try_on": "試着する"
   },
   "error": {
     "timeout": "時間切れです — もう一度お試しください",
@@ -91,10 +92,13 @@
     "gender_female": "女性",
     "gender_male": "男性",
     "body_slim": "スリム",
+    "body_slim_male": "スリム",
     "body_regular": "レギュラー",
+    "body_regular_male": "レギュラー",
     "body_curvy": "カーヴィー",
     "body_curvy_male": "がっしり",
     "body_plus": "プラス",
+    "body_plus_male": "プラス",
     "more_button": "ほかのモデル：年齢と体型",
     "more_title": "すべてのモデル",
     "more_subtitle": "年齢と体型で選べます — 写真は不要です",

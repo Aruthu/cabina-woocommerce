@@ -1,6 +1,7 @@
 {
   "common": {
-    "back": "Zurück"
+    "back": "Zurück",
+    "try_on": "Anprobieren"
   },
   "error": {
     "timeout": "Zeitüberschreitung — erneut versuchen",
@@ -91,10 +92,13 @@
     "gender_female": "Damen",
     "gender_male": "Herren",
     "body_slim": "Schmal",
+    "body_slim_male": "Schmal",
     "body_regular": "Standard",
+    "body_regular_male": "Standard",
     "body_curvy": "Kurvig",
     "body_curvy_male": "Kräftig",
-    "body_plus": "Plus",
+    "body_plus": "Plus Size",
+    "body_plus_male": "Plus Size",
     "more_button": "Weitere Modelle: Alter und Figur",
     "more_title": "Alle Modelle",
     "more_subtitle": "Wählen Sie nach Alter und Figur — kein Foto nötig",

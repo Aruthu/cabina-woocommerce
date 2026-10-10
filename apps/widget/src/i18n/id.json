@@ -1,6 +1,7 @@
 {
   "common": {
-    "back": "Kembali"
+    "back": "Kembali",
+    "try_on": "Coba pada diri Anda"
   },
   "error": {
     "timeout": "Waktu habis — silakan coba lagi",
@@ -91,10 +92,13 @@
     "gender_female": "Wanita",
     "gender_male": "Pria",
     "body_slim": "Ramping",
+    "body_slim_male": "Ramping",
     "body_regular": "Reguler",
-    "body_curvy": "Curvy",
+    "body_regular_male": "Reguler",
+    "body_curvy": "Berisi",
     "body_curvy_male": "Kekar",
-    "body_plus": "Plus",
+    "body_plus": "Plus size",
+    "body_plus_male": "Plus size",
     "more_button": "Model lainnya: usia dan bentuk tubuh",
     "more_title": "Semua model",
     "more_subtitle": "Pilih berdasarkan usia dan bentuk tubuh — tanpa perlu foto",
