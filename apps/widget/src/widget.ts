@@ -17,11 +17,11 @@ import {
   CURRENT_PHOTO_CONSENT_VERSION,
 } from './features/photo-consent/photo-consent-storage';
 import { createModelGallery, createMoreModelsScreen, resolveModelThumbs, setModelError, fetchModelAsDataUrl } from './features/model-gallery/model-gallery';
-import type { PresetModel } from './features/model-gallery/presets';
+import { KIDS_MODELS, KIDS_AGE_BANDS, type PresetModel } from './features/model-gallery/presets';
 import { createGarmentSelect, resolvePageGarmentParams, type PageGarmentParams } from './features/garment-select/garment-select';
 import { showTryOnOverlay, removeTryOnOverlay, updateSizeBadge, setShowSizeScore } from './features/tryon/tryon-overlay';
-import { recommendFromTables, stimaPiedeDaAltezza } from './features/size/size-recommendation';
-import { fetchSizeTables } from './api/widget-api';
+import { recommendFromTables, stimaPiedeDaAltezza, capoDaBambino } from './features/size/size-recommendation';
+import { fetchSizeTables, type SizeTableResult } from './api/widget-api';
 import {
   segnaProvaNelForm,
   rimettiAttribuzione,
@@ -103,6 +103,11 @@ export function __resetWidgetForTesting(): void {
   bottoneIniettato = null;
   if (timerReinserimento) clearTimeout(timerReinserimento);
   timerReinserimento = null;
+  garmentAnalysis = null;
+  garmentAnalysisDone = Promise.resolve();
+  garmentAnalysisPending = false;
+  sizeTables = undefined;
+  sizeTablesDone = Promise.resolve();
   __resetAttribuzioneForTesting();
 }
 let currentLang: WidgetLanguage | null = null;
@@ -142,6 +147,13 @@ let garmentAnalysis: GarmentAnalysis | null = null; // Analisi capo in backgroun
 // `'auto'` quando il click arriva prima della risposta. Già risolta = nessuna
 // analisi in corso (widget non inizializzato, o pagina senza immagine prodotto).
 let garmentAnalysisDone: Promise<void> = Promise.resolve();
+let garmentAnalysisPending = false;
+// Le tabelle taglie del merchant, chieste all'avvio come l'analisi del capo
+// (12/10/2026): lo step `photo` deve sapere PRIMA di disegnarsi se il capo è da
+// bambino, perché in quel caso non mostra il caricamento foto. `undefined` =
+// non ancora arrivate; `null` = la chiamata è fallita (il capo passa per adulto).
+let sizeTables: SizeTableResult[] | null | undefined;
+let sizeTablesDone: Promise<void> = Promise.resolve();
 /** Ingresso corrente nello step "Cosa provi" (vedi il case 'garment_select'). */
 let garmentSelectEntryId = 0;
 // Story 12.4 (Task 5.3): resultId dell'ultima generazione try-on, tracciato
@@ -498,6 +510,37 @@ function renderState(button: HTMLElement): void {
       content.innerHTML = '';
       restoreDragHandle(content);
 
+      // Capo da bambino? (12/10/2026) Si decide dalle tabelle taglie, e se il
+      // merchant ne ha di adulti e di bambini anche dalla categoria del capo.
+      // Un click più veloce delle due risposte non deve mostrare il caricamento
+      // foto a un minore: si aspetta, e si ridisegna lo step quando arrivano.
+      const mista = sizeTables !== undefined
+        && sizeTables !== null
+        && sizeTables.some((t) => t.audience === 'kids')
+        && sizeTables.some((t) => t.audience !== 'kids');
+      if (sizeTables === undefined || (mista && garmentAnalysisPending)) {
+        const attesa = document.createElement('p');
+        attesa.textContent = getLocaleString('garment_select.loading');
+        attesa.style.cssText = 'text-align:center;color:#6b7280;font-size:14px;padding:24px 0;';
+        content.appendChild(attesa);
+        void Promise.all([sizeTablesDone, garmentAnalysisDone]).then(() => {
+          if (widgetContext.state === 'photo') renderState(button);
+        });
+        break;
+      }
+      if (capoDaBambino(sizeTables ?? [], garmentAnalysis?.category)) {
+        content.appendChild(createMoreModelsScreen(
+          {
+            title: getLocaleString('model_gallery.more_title'),
+            subtitle: getLocaleString('model_gallery.more_subtitle'),
+          },
+          (model) => void selezionaModella(model, overlay, button),
+          { models: KIDS_MODELS, bands: KIDS_AGE_BANDS },
+        ));
+        resolveModelThumbs(content, widgetContext.baseUrl ?? '');
+        break;
+      }
+
       const photoUI = createPhotoCapture(
         {
           title: getLocaleString('photo.title'),
@@ -569,43 +612,8 @@ function renderState(button: HTMLElement): void {
         orLabel.style.cssText = 'text-align:center;color:#9ca3af;font-size:12px;margin:16px 0 8px;text-transform:uppercase;letter-spacing:0.05em;';
         content.appendChild(orLabel);
 
-        // La selezione converte l'asset in data URL (contratto photoData
-        // invariato verso tryonGenerative/callRenderApi) e dispatcha
-        // PRESET_MODEL_SELECTED → form misure (Proposta a 2026-07-31).
-        // Una sola funzione per le due schermate della galleria.
-        const onModelSelected = async (model: PresetModel): Promise<void> => {
-          // Guard re-entrancy (P1 code review): un secondo click durante la
-          // fetch in volo verrebbe ignorato — niente doppio rendering/FASHN.
-          if (modelSelectionInFlight) return;
-          modelSelectionInFlight = true;
-
-          const baseUrl = widgetContext.baseUrl ?? '';
-          const modalContent = overlay.querySelector('[data-cabina-modal-content]');
-          // Reset di un eventuale errore precedente prima del nuovo tentativo (P7).
-          if (modalContent) setModelError(modalContent, '');
-          try {
-            // Normalizzata come una foto caricata: gli asset preset sono già
-            // leggeri, ma così il formato a valle è davvero uno solo — è ciò
-            // che photo-utils dichiara e su cui i consumatori possono contare.
-            const dataUrl = await downscalePhotoDataUrl(
-              await fetchModelAsDataUrl(baseUrl, model.assetPath),
-            );
-            // Guard di ciclo di vita (P5): se durante i (fino a) 5s di fetch la
-            // sessione è cambiata (modale chiuso/riaperto), NON dirottare la
-            // nuova sessione in rendering con la modella vecchia.
-            if (widgetContext.state !== 'photo') return;
-            widgetContext = widgetReducer(widgetContext, { type: 'PRESET_MODEL_SELECTED', dataUrl });
-            renderState(button);
-          } catch (e) {
-            // Silent non-blocking: mostra errore inline nella galleria,
-            // resta sullo step 'photo' (l'acquirente può riprovare o usare la foto).
-            console.warn('[widget] Failed to load preset model', model.assetPath, e);
-            const errTarget = overlay.querySelector('[data-cabina-modal-content]');
-            if (errTarget) setModelError(errTarget, getLocaleString('model_gallery.load_error'));
-          } finally {
-            modelSelectionInFlight = false;
-          }
-        };
+        // Una sola funzione per le tre schermate della galleria (vedi `selezionaModella`).
+        const onModelSelected = (model: PresetModel): void => void selezionaModella(model, overlay, button);
 
         const gallery = createModelGallery(
           {
@@ -1118,7 +1126,9 @@ function renderState(button: HTMLElement): void {
           // stima dall'altezza — e il consiglio lo sa, così pesa come una stima.
           const footEstimated = measuresForCalc.footCm == null;
           if (footEstimated) measuresForCalc.footCm = stimaPiedeDaAltezza(measuresForCalc.heightCm);
-          fetchSizeTables(apiKeyForCalc, baseUrlForCalc).then((tables) => {
+          // Le tabelle sono già arrivate all'avvio (12/10/2026): si richiedono
+          // solo se quella chiamata era fallita (rilievo di Kilo sulla #317).
+          (sizeTables ? Promise.resolve(sizeTables) : fetchSizeTables(apiKeyForCalc, baseUrlForCalc)).then((tables) => {
             if (tables && tables.length > 0) {
               // La tabella del capo, non la prima: su un pantalone «40», non «M».
               const scelta = recommendFromTables(measuresForCalc, tables, {
@@ -1497,7 +1507,52 @@ function apriSeChiestoDallUrl(): void {
   document.querySelector<HTMLElement>('[data-cabina-widget-btn]')?.click();
 }
 
+/**
+ * La selezione di una modella preset converte l'asset in data URL (contratto
+ * photoData invariato verso tryonGenerative/callRenderApi) e dispatcha
+ * PRESET_MODEL_SELECTED → form misure (Proposta a 2026-07-31).
+ */
+async function selezionaModella(model: PresetModel, overlay: HTMLElement, button: HTMLElement): Promise<void> {
+  // Guard re-entrancy (P1 code review): un secondo click durante la
+  // fetch in volo verrebbe ignorato — niente doppio rendering/FASHN.
+  if (modelSelectionInFlight) return;
+  modelSelectionInFlight = true;
+
+  const baseUrl = widgetContext.baseUrl ?? '';
+  const modalContent = overlay.querySelector('[data-cabina-modal-content]');
+  // Reset di un eventuale errore precedente prima del nuovo tentativo (P7).
+  if (modalContent) setModelError(modalContent, '');
+  try {
+    // Normalizzata come una foto caricata: gli asset preset sono già
+    // leggeri, ma così il formato a valle è davvero uno solo — è ciò
+    // che photo-utils dichiara e su cui i consumatori possono contare.
+    const dataUrl = await downscalePhotoDataUrl(
+      await fetchModelAsDataUrl(baseUrl, model.assetPath),
+    );
+    // Guard di ciclo di vita (P5): se durante i (fino a) 5s di fetch la
+    // sessione è cambiata (modale chiuso/riaperto), NON dirottare la
+    // nuova sessione in rendering con la modella vecchia.
+    if (widgetContext.state !== 'photo') return;
+    widgetContext = widgetReducer(widgetContext, { type: 'PRESET_MODEL_SELECTED', dataUrl });
+    renderState(button);
+  } catch (e) {
+    // Silent non-blocking: mostra errore inline nella galleria,
+    // resta sullo step 'photo' (l'acquirente può riprovare o usare la foto).
+    console.warn('[widget] Failed to load preset model', model.assetPath, e);
+    const errTarget = overlay.querySelector('[data-cabina-modal-content]');
+    if (errTarget) setModelError(errTarget, getLocaleString('model_gallery.load_error'));
+  } finally {
+    modelSelectionInFlight = false;
+  }
+}
+
 function startGarmentAnalysis(apiKey: string, baseUrl: string): void {
+  // Le tabelle taglie, per sapere allo step foto se il capo è da bambino
+  // (12/10/2026). `null` in errore: il capo passa per adulto, come prima.
+  sizeTables = undefined;
+  sizeTablesDone = fetchSizeTables(apiKey, baseUrl)
+    .then((tables) => { sizeTables = tables; })
+    .catch(() => { sizeTables = null; });
   // Le foto delle varianti (Shopify): la prova segue il colore scelto dopo
   // l'apertura della pagina. Senza attesa, perché serve solo al click.
   void caricaImmaginiVarianti();
@@ -1507,9 +1562,11 @@ function startGarmentAnalysis(apiKey: string, baseUrl: string): void {
     garmentAnalysisDone = Promise.resolve();
     return;
   }
+  garmentAnalysisPending = true;
   garmentAnalysisDone = analyzeGarmentFromUrl(apiKey, productUrl, baseUrl)
     .then((result) => { garmentAnalysis = result; })
-    .catch(() => { garmentAnalysis = null; });
+    .catch(() => { garmentAnalysis = null; })
+    .finally(() => { garmentAnalysisPending = false; });
 }
 
 /**

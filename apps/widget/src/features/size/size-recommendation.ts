@@ -1,4 +1,4 @@
-import type { Measures, SizeTableRow, SizeTableCategory } from '@cabina/shared';
+import type { Measures, SizeTableRow, SizeTableCategory, SizeTableAudience } from '@cabina/shared';
 import type { GarmentCategory } from '../../state/types';
 
 /** Il peso di ogni dimensione nel calcolo della distanza. */
@@ -674,10 +674,10 @@ export interface SizeTableCandidate {
  * misure: busto e vita) e `dress` → `top` (un abito si sceglie dal busto
  * prima che dai fianchi; rilievo di Kilo sulla #192).
  */
-export function pickSizeTables(
-  tables: readonly SizeTableCandidate[],
+export function pickSizeTables<T extends SizeTableCandidate>(
+  tables: readonly T[],
   category: GarmentCategory | null | undefined,
-): SizeTableCandidate[] {
+): T[] {
   if (tables.length === 0) return [];
   const volute: SizeTableCategory[] =
     category === 'outerwear' ? ['outerwear', 'top']
@@ -690,6 +690,35 @@ export function pickSizeTables(
   }
   const generiche = tables.filter((t) => t.category === null);
   return generiche.length > 0 ? generiche : [tables[0]!];
+}
+
+/**
+ * Il capo è da bambino? (12/10/2026, decisione di Arou dell'11/10.)
+ *
+ * Lo dice la tabella taglie che vale per il capo — le stesse candidate del
+ * consiglio di taglia — quando sono TUTTE `audience: 'kids'`. Allora il widget
+ * mostra solo le modelle preset minorenni e non chiede la foto: un minore non
+ * può consentire da solo (art. 8 GDPR, soglia 16 anni) e noi non raccogliamo
+ * foto di minori. Senza tabelle, o con una tabella adulta fra le candidate, il
+ * capo è da adulto e tutto resta com'era.
+ *
+ * Se il merchant ha tabelle di entrambi e la categoria del capo non si sa
+ * (analisi fallita, accessorio), si chiude dal lato del minore: capo da bambino.
+ * Rilievo di Kilo sulla #317: prima decideva l'ordine di caricamento.
+ *
+ * shortcut: la tabella è per categoria e non per prodotto, quindi un merchant
+ * con «maglie adulti» e «maglie bambini» ha un capo ambiguo e qui vince
+ * l'adulto; si supera quando il merchant potrà legare la tabella al prodotto.
+ */
+export function capoDaBambino(
+  tables: ReadonlyArray<SizeTableCandidate & { audience?: SizeTableAudience | null }>,
+  category: GarmentCategory | null | undefined,
+): boolean {
+  if (tables.length === 0) return false;
+  const kids = (t: { audience?: SizeTableAudience | null }) => t.audience === 'kids';
+  const categoriaIgnota = category == null || category === 'unknown' || category === 'accessory';
+  if (categoriaIgnota && tables.some(kids)) return true;
+  return pickSizeTables(tables, category).every(kids);
 }
 
 /**

@@ -45,6 +45,15 @@ export const WidgetConfigSchema = z.object({
 export const SizeTableCategorySchema = z.enum(['top', 'bottom', 'dress', 'outerwear', 'footwear']);
 export type SizeTableCategory = z.infer<typeof SizeTableCategorySchema>;
 
+/**
+ * Per chi è la tabella (12/10/2026): `kids` = capi da bambino, fino a 15 anni.
+ * È ciò che dice al widget «capo da bambino»: solo modelle preset minorenni e
+ * nessuna foto del cliente, così non si raccoglie alcuna foto di minori.
+ * La soglia è 16 anni, la più alta fra quelle nazionali dell'art. 8 GDPR.
+ */
+export const SizeTableAudienceSchema = z.enum(['adult', 'kids']);
+export type SizeTableAudience = z.infer<typeof SizeTableAudienceSchema>;
+
 /** Singola riga della tabella taglie. */
 export const SizeTableRowSchema = z
   .object({
@@ -97,6 +106,7 @@ export const SizeTableCreateSchema = z.object({
   name: z.string().min(1).max(100),
   data: SizeTableDataSchema,
   category: SizeTableCategorySchema.nullable().optional(),
+  audience: SizeTableAudienceSchema.default('adult'),
 });
 
 // ─── Garment Views Schemas (Story 10.3) ─────────────────────────────────

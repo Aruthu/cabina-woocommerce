@@ -5,7 +5,7 @@ Requires at least: 6.5
 Requires Plugins: woocommerce
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 1.2.2
+Stable tag: 1.2.3
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -117,6 +117,10 @@ Yes. The plugin uses standard WooCommerce hooks. If your theme does not support 
 4. The Cabina Dashboard, where you customize the widget
 
 == Changelog ==
+
+= 1.2.3 =
+
+* Widget updated to the current release: size charts carry a "Who it is for" field (adults, or children and teens up to 15); on garments covered only by children's charts the fitting room shows 18 under-16 preset models and never asks the shopper for a photo
 
 = 1.2.2 =
 

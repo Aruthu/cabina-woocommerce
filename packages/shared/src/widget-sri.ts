@@ -217,7 +217,7 @@
 // categoria e giudice passa da Novita AI a Vercel AI Gateway (modello OpenAI,
 // host Azure con zero conservazione), perché Novita ritira il modello il 09/10.
 // Cambiano i dizionari (8 lingue) E `CURRENT_PHOTO_CONSENT_VERSION` nel codice.
-export const WIDGET_SRI ='sha384-Zj9olkJd/1c0ZjoxHw7pCzHBj1GkyyMlVp110XGxFMHskFe8nwjejK7cvl71PjJW';
+export const WIDGET_SRI ='sha384-XNpgd7ns4GUbMwx9qld5GQHOWJchfN/ZBRlDohgrW4XgZqzeF8VNcZKjqdGk5d3b';
 
 /**
  * URL pubblico del bundle widget. Fonte unica per snippet manuale, ScriptTag

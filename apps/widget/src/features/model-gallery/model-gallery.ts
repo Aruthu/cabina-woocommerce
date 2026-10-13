@@ -7,6 +7,7 @@ import {
   GENDER_LABEL_KEYS,
   ageBandLabel,
   type PresetModel,
+  type AgeBand,
 } from './presets';
 import { getLocaleString } from '../../i18n/i18n';
 
@@ -216,6 +217,9 @@ export function createModelGallery(
 export function createMoreModelsScreen(
   strings: ModelGalleryStrings,
   onModelSelected: (model: PresetModel) => void,
+  // Il set da mostrare: le 32 adulte di default, le 18 minorenni su un capo da
+  // bambino (12/10/2026). Stessa schermata, stessi gruppi «genere · fascia».
+  set: { models: readonly PresetModel[]; bands: readonly AgeBand[] } = { models: MORE_MODELS, bands: AGE_BANDS },
 ): DocumentFragment {
   const fragment = document.createDocumentFragment();
 
@@ -224,8 +228,8 @@ export function createMoreModelsScreen(
   appendHeading(container, strings);
 
   for (const gender of MODEL_GENDERS) {
-    for (const band of AGE_BANDS) {
-      const models = MORE_MODELS.filter((m) => m.gender === gender && m.ageBand === band);
+    for (const band of set.bands) {
+      const models = set.models.filter((m) => m.gender === gender && m.ageBand === band);
       if (models.length === 0) continue;
       appendGroup(
         container,

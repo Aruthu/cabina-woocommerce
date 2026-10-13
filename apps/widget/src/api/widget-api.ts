@@ -1,4 +1,4 @@
-import type { ApiResponse, Measures, SizeTableRow, SizeTableCategory, WidgetPublicConfig, FashnGarmentCategory, StimaMisure } from '@cabina/shared';
+import type { ApiResponse, Measures, SizeTableRow, SizeTableCategory, SizeTableAudience, WidgetPublicConfig, FashnGarmentCategory, StimaMisure } from '@cabina/shared';
 import { normalizeProductUrl, VISION_UNAVAILABLE_ERROR } from '@cabina/shared';
 import type { GarmentAnalysis, SelectedGarment } from '../state/types';
 
@@ -60,6 +60,8 @@ export interface SizeTableResult {
   name: string;
   /** Per quale capo vale; `null` = qualsiasi (tabelle di prima del 05/09/2026). */
   category: SizeTableCategory | null;
+  /** Per chi è: `kids` = capo da bambino, solo modelle preset minorenni (12/10/2026). */
+  audience: SizeTableAudience;
   data: SizeTableRow[];
 }
 

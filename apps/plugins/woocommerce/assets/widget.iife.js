@@ -3594,6 +3594,7 @@
     defaultLanguage: enumType(WIDGET_LANGUAGES).default("en")
   });
   const SizeTableCategorySchema = enumType(["top", "bottom", "dress", "outerwear", "footwear"]);
+  const SizeTableAudienceSchema = enumType(["adult", "kids"]);
   const SizeTableRowSchema = objectType({
     size: stringType().min(1, "La taglia è obbligatoria").max(20),
     heightMin: numberType().int().min(0).max(300),
@@ -3629,7 +3630,8 @@
   objectType({
     name: stringType().min(1).max(100),
     data: SizeTableDataSchema,
-    category: SizeTableCategorySchema.nullable().optional()
+    category: SizeTableCategorySchema.nullable().optional(),
+    audience: SizeTableAudienceSchema.default("adult")
   });
   enumType(["front", "right", "back", "left"]);
   const PRODUCT_URL_MAX_LENGTH = 2048;
@@ -5452,6 +5454,8 @@
     return isPhotoConsentValid(stored);
   }
   const AGE_BANDS = ["18-25", "26-35", "36-45", "46-55"];
+  const KIDS_AGE_BANDS = ["7-9", "10-12", "13-15"];
+  const MODEL_GENDERS_ORDER = ["female", "male"];
   function preset(gender, bodyType, labelKey, ageBand) {
     const id = ageBand ? `${gender}-${ageBand}-${bodyType}` : `${gender}-${bodyType}`;
     return {
@@ -5483,7 +5487,17 @@
       a.gender.localeCompare(b.gender) || a.ageBand.localeCompare(b.ageBand)
     )
   );
-  const ALL_MODELS = MORE_MODELS;
+  const KIDS_BODY = [
+    ["slim", "model_gallery.body_slim", "model_gallery.body_slim_male"],
+    ["regular", "model_gallery.body_regular", "model_gallery.body_regular_male"],
+    ["sturdy", "model_gallery.body_sturdy", "model_gallery.body_sturdy_male"]
+  ];
+  const KIDS_MODELS = MODEL_GENDERS_ORDER.flatMap(
+    (gender) => KIDS_AGE_BANDS.flatMap(
+      (band) => KIDS_BODY.map(([body, keyF, keyM]) => preset(gender, body, gender === "female" ? keyF : keyM, band))
+    )
+  );
+  const ALL_MODELS = [...MORE_MODELS, ...KIDS_MODELS];
   function ageBandLabel(band) {
     return band.replace("-", "–");
   }
@@ -5491,7 +5505,7 @@
     female: "model_gallery.gender_female",
     male: "model_gallery.gender_male"
   };
-  const MODEL_GENDERS = ["female", "male"];
+  const MODEL_GENDERS = MODEL_GENDERS_ORDER;
   function modelLabel(model) {
     return getLocaleString(model.labelKey);
   }
@@ -5600,14 +5614,14 @@
     fragment.appendChild(container);
     return fragment;
   }
-  function createMoreModelsScreen(strings, onModelSelected) {
+  function createMoreModelsScreen(strings, onModelSelected, set = { models: MORE_MODELS, bands: AGE_BANDS }) {
     const fragment = document.createDocumentFragment();
     const container = document.createElement("div");
     container.setAttribute("data-cabina-model-more-screen", "");
     appendHeading(container, strings);
     for (const gender of MODEL_GENDERS) {
-      for (const band of AGE_BANDS) {
-        const models = MORE_MODELS.filter((m) => m.gender === gender && m.ageBand === band);
+      for (const band of set.bands) {
+        const models = set.models.filter((m) => m.gender === gender && m.ageBand === band);
         if (models.length === 0) continue;
         appendGroup(
           container,
@@ -7745,6 +7759,13 @@
     const generiche = tables.filter((t) => t.category === null);
     return generiche.length > 0 ? generiche : [tables[0]];
   }
+  function capoDaBambino(tables, category) {
+    if (tables.length === 0) return false;
+    const kids = (t) => t.audience === "kids";
+    const categoriaIgnota = category == null || category === "unknown" || category === "accessory";
+    if (categoriaIgnota && tables.some(kids)) return true;
+    return pickSizeTables(tables, category).every(kids);
+  }
   function recommendFromTables(measures, tables, options) {
     const candidate = pickSizeTables(tables, options?.garment?.category ?? null);
     let migliore = null;
@@ -7829,6 +7850,9 @@
   let modalEscHandler = null;
   let garmentAnalysis = null;
   let garmentAnalysisDone = Promise.resolve();
+  let garmentAnalysisPending = false;
+  let sizeTables;
+  let sizeTablesDone = Promise.resolve();
   let garmentSelectEntryId = 0;
   let lastTryonResultId = null;
   let lastCatalog = null;
@@ -8087,6 +8111,29 @@
         if (!content) return;
         content.innerHTML = "";
         restoreDragHandle(content);
+        const mista = sizeTables !== void 0 && sizeTables !== null && sizeTables.some((t) => t.audience === "kids") && sizeTables.some((t) => t.audience !== "kids");
+        if (sizeTables === void 0 || mista && garmentAnalysisPending) {
+          const attesa = document.createElement("p");
+          attesa.textContent = getLocaleString("garment_select.loading");
+          attesa.style.cssText = "text-align:center;color:#6b7280;font-size:14px;padding:24px 0;";
+          content.appendChild(attesa);
+          void Promise.all([sizeTablesDone, garmentAnalysisDone]).then(() => {
+            if (widgetContext.state === "photo") renderState(button);
+          });
+          break;
+        }
+        if (capoDaBambino(sizeTables ?? [], garmentAnalysis?.category)) {
+          content.appendChild(createMoreModelsScreen(
+            {
+              title: getLocaleString("model_gallery.more_title"),
+              subtitle: getLocaleString("model_gallery.more_subtitle")
+            },
+            (model) => void selezionaModella(model, overlay, button),
+            { models: KIDS_MODELS, bands: KIDS_AGE_BANDS }
+          ));
+          resolveModelThumbs(content, widgetContext.baseUrl ?? "");
+          break;
+        }
         const photoUI = createPhotoCapture(
           {
             title: getLocaleString("photo.title"),
@@ -8143,27 +8190,7 @@
           orLabel.textContent = getLocaleString("model_gallery.or_label");
           orLabel.style.cssText = "text-align:center;color:#9ca3af;font-size:12px;margin:16px 0 8px;text-transform:uppercase;letter-spacing:0.05em;";
           content.appendChild(orLabel);
-          const onModelSelected = async (model) => {
-            if (modelSelectionInFlight) return;
-            modelSelectionInFlight = true;
-            const baseUrl = widgetContext.baseUrl ?? "";
-            const modalContent = overlay.querySelector("[data-cabina-modal-content]");
-            if (modalContent) setModelError(modalContent, "");
-            try {
-              const dataUrl = await downscalePhotoDataUrl(
-                await fetchModelAsDataUrl(baseUrl, model.assetPath)
-              );
-              if (widgetContext.state !== "photo") return;
-              widgetContext = widgetReducer(widgetContext, { type: "PRESET_MODEL_SELECTED", dataUrl });
-              renderState(button);
-            } catch (e) {
-              console.warn("[widget] Failed to load preset model", model.assetPath, e);
-              const errTarget = overlay.querySelector("[data-cabina-modal-content]");
-              if (errTarget) setModelError(errTarget, getLocaleString("model_gallery.load_error"));
-            } finally {
-              modelSelectionInFlight = false;
-            }
-          };
+          const onModelSelected = (model) => void selezionaModella(model, overlay, button);
           const gallery = createModelGallery(
             {
               title: getLocaleString("model_gallery.title"),
@@ -8507,7 +8534,7 @@
             const measuresForCalc = { ...DEFAULT_MEASURES, ...widgetContext.measures ?? {} };
             const footEstimated = measuresForCalc.footCm == null;
             if (footEstimated) measuresForCalc.footCm = stimaPiedeDaAltezza(measuresForCalc.heightCm);
-            fetchSizeTables(apiKeyForCalc, baseUrlForCalc).then((tables) => {
+            (sizeTables ? Promise.resolve(sizeTables) : fetchSizeTables(apiKeyForCalc, baseUrlForCalc)).then((tables) => {
               if (tables && tables.length > 0) {
                 const scelta = recommendFromTables(measuresForCalc, tables, {
                   measureSource: widgetContext.measureSource ?? void 0,
@@ -8697,7 +8724,34 @@
     if (!arrivaDalNegozio()) return;
     document.querySelector("[data-cabina-widget-btn]")?.click();
   }
+  async function selezionaModella(model, overlay, button) {
+    if (modelSelectionInFlight) return;
+    modelSelectionInFlight = true;
+    const baseUrl = widgetContext.baseUrl ?? "";
+    const modalContent = overlay.querySelector("[data-cabina-modal-content]");
+    if (modalContent) setModelError(modalContent, "");
+    try {
+      const dataUrl = await downscalePhotoDataUrl(
+        await fetchModelAsDataUrl(baseUrl, model.assetPath)
+      );
+      if (widgetContext.state !== "photo") return;
+      widgetContext = widgetReducer(widgetContext, { type: "PRESET_MODEL_SELECTED", dataUrl });
+      renderState(button);
+    } catch (e) {
+      console.warn("[widget] Failed to load preset model", model.assetPath, e);
+      const errTarget = overlay.querySelector("[data-cabina-modal-content]");
+      if (errTarget) setModelError(errTarget, getLocaleString("model_gallery.load_error"));
+    } finally {
+      modelSelectionInFlight = false;
+    }
+  }
   function startGarmentAnalysis(apiKey2, baseUrl) {
+    sizeTables = void 0;
+    sizeTablesDone = fetchSizeTables(apiKey2, baseUrl).then((tables) => {
+      sizeTables = tables;
+    }).catch(() => {
+      sizeTables = null;
+    });
     void caricaImmaginiVarianti();
     garmentAnalysis = null;
     const productUrl = extractProductImageUrl();
@@ -8705,10 +8759,13 @@
       garmentAnalysisDone = Promise.resolve();
       return;
     }
+    garmentAnalysisPending = true;
     garmentAnalysisDone = analyzeGarmentFromUrl(apiKey2, productUrl, baseUrl).then((result) => {
       garmentAnalysis = result;
     }).catch(() => {
       garmentAnalysis = null;
+    }).finally(() => {
+      garmentAnalysisPending = false;
     });
   }
   const script = document.currentScript;

@@ -35,19 +35,29 @@
  * rovinata. Misurato con un PNG senza perdita: non era la compressione. I file
  * di luglio restano in `src/models/` (`MODELLE_DI_LUGLIO`) perché i widget dentro
  * i plugin (WooCommerce, PrestaShop) li chiedono ancora per id.
+ *
+ * 2026-10-12 (Arou): **18 modelle MINORENNI** (`KIDS_MODELS`), 7–15 anni: 3 fasce ×
+ * 2 generi × slim/regular/sturdy. Si vedono SOLO su un capo da bambino, cioè quando
+ * la tabella taglie del merchant che vale per il capo è `audience: 'kids'`
+ * (`capoDaBambino` in size-recommendation.ts), e lì sono l'unica via: niente foto
+ * propria, perché un minore non può consentire da solo (art. 8 GDPR, soglia 16).
+ * Brief in `genera_minorenni.py`, asset da `asset_cdn.py minorenni_candidate/scelte`.
  */
 
 /** Corporature eterogenee del set (AC2: "small but clearly heterogeneous"). */
-export type BodyType = 'slim' | 'regular' | 'curvy' | 'plus';
+export type BodyType = 'slim' | 'regular' | 'curvy' | 'plus' | 'sturdy';
 
 /** Asse aggiunto il 2026-07-26 insieme al set maschile. */
 export type ModelGender = 'female' | 'male';
 
 /** Asse aggiunto il 2026-09-18 con le 32 nuove. L'etichetta è il numero: non si traduce. */
-export type AgeBand = '18-25' | '26-35' | '36-45' | '46-55';
+export type AgeBand = '7-9' | '10-12' | '13-15' | '18-25' | '26-35' | '36-45' | '46-55';
 
-/** Fasce nell'ordine della seconda schermata. */
+/** Fasce ADULTE nell'ordine della seconda schermata. */
 export const AGE_BANDS: readonly AgeBand[] = ['18-25', '26-35', '36-45', '46-55'];
+
+/** Fasce dei MINORENNI (12/10/2026): fino a 15, dai 16 si è adulti. */
+export const KIDS_AGE_BANDS: readonly AgeBand[] = ['7-9', '10-12', '13-15'];
 
 export interface PresetModel {
   /** Identificatore stabile `{gender}-{bodyType}`, usato nei test e come
@@ -73,6 +83,8 @@ export interface PresetModel {
    *  scaricherebbe 1,2 MB di foto piene per disegnare otto francobolli. */
   thumbPath: string;
 }
+
+const MODEL_GENDERS_ORDER: readonly ModelGender[] = ['female', 'male'];
 
 function preset(gender: ModelGender, bodyType: BodyType, labelKey: string, ageBand?: AgeBand): PresetModel {
   const id = ageBand ? `${gender}-${ageBand}-${bodyType}` : `${gender}-${bodyType}`;
@@ -121,9 +133,27 @@ export const MORE_MODELS: readonly PresetModel[] = PRESET_MODELS.flatMap((base) 
   a.gender.localeCompare(b.gender) || a.ageBand!.localeCompare(b.ageBand!),
 );
 
+/**
+ * Le 18 minorenni (12/10/2026): genere × fascia × slim/regular/sturdy, costruite
+ * già nell'ordine di rendering (le fasce non si ordinano per stringa: «10-12» < «7-9»).
+ * `sturdy` e non `curvy`: su un bambino «curvy» è sbagliato; in italiano, spagnolo
+ * e portoghese l'etichetta si accorda («Robusta» / «Robusto»).
+ */
+const KIDS_BODY: ReadonlyArray<readonly [BodyType, string, string]> = [
+  ['slim', 'model_gallery.body_slim', 'model_gallery.body_slim_male'],
+  ['regular', 'model_gallery.body_regular', 'model_gallery.body_regular_male'],
+  ['sturdy', 'model_gallery.body_sturdy', 'model_gallery.body_sturdy_male'],
+];
+export const KIDS_MODELS: readonly PresetModel[] = MODEL_GENDERS_ORDER.flatMap((gender) =>
+  KIDS_AGE_BANDS.flatMap((band) =>
+    KIDS_BODY.map(([body, keyF, keyM]) => preset(gender, body, gender === 'female' ? keyF : keyM, band)),
+  ),
+);
+
 /** Tutte le modelle del widget, per risolvere un `id` (miniature, selezione).
- *  Le 32: la prima schermata ne è un sottoinsieme (le 26–35) dal 27/09. */
-export const ALL_MODELS: readonly PresetModel[] = MORE_MODELS;
+ *  Le 32 adulte (la prima schermata ne è un sottoinsieme, le 26–35, dal 27/09)
+ *  più le 18 minorenni. */
+export const ALL_MODELS: readonly PresetModel[] = [...MORE_MODELS, ...KIDS_MODELS];
 
 /** «26-35» → «26–35»: il trattino lungo è quello tipografico degli intervalli. */
 export function ageBandLabel(band: AgeBand): string {
@@ -137,4 +167,4 @@ export const GENDER_LABEL_KEYS: Record<ModelGender, string> = {
 };
 
 /** Generi presenti nel set, nell'ordine di rendering. */
-export const MODEL_GENDERS: readonly ModelGender[] = ['female', 'male'];
+export const MODEL_GENDERS: readonly ModelGender[] = MODEL_GENDERS_ORDER;

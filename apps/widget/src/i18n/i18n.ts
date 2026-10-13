@@ -89,6 +89,9 @@ export interface LocaleDict {
     body_curvy: string;
     /** "Curvy" è femminile in più lingue: il maschile ha la sua etichetta. */
     body_curvy_male: string;
+    /** Terza corporatura dei MINORENNI (12/10/2026): su un bambino «curvy» è sbagliato. */
+    body_sturdy: string;
+    body_sturdy_male: string;
     body_plus: string;
     /** Seconda schermata della galleria (32 modelle per fascia d'età, 2026-09-18). */
     more_button: string;
