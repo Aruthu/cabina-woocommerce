@@ -5505,6 +5505,10 @@
     female: "model_gallery.gender_female",
     male: "model_gallery.gender_male"
   };
+  const KIDS_GENDER_LABEL_KEYS = {
+    female: "model_gallery.gender_female_kids",
+    male: "model_gallery.gender_male_kids"
+  };
   const MODEL_GENDERS = MODEL_GENDERS_ORDER;
   function modelLabel(model) {
     return getLocaleString(model.labelKey);
@@ -5625,7 +5629,7 @@
         if (models.length === 0) continue;
         appendGroup(
           container,
-          `${getLocaleString(GENDER_LABEL_KEYS[gender])} · ${ageBandLabel(band)}`,
+          `${set.genderKeys ? getLocaleStringOr(set.genderKeys[gender], GENDER_LABEL_KEYS[gender]) : getLocaleString(GENDER_LABEL_KEYS[gender])} · ${ageBandLabel(band)}`,
           `${gender}-${band}`,
           models,
           onModelSelected
@@ -5633,6 +5637,38 @@
       }
     }
     appendErrorArea(container);
+    fragment.appendChild(container);
+    return fragment;
+  }
+  function createAudienceChoiceScreen(strings, onChoice) {
+    const fragment = document.createDocumentFragment();
+    const container = document.createElement("div");
+    container.setAttribute("data-cabina-audience-choice", "");
+    appendHeading(container, { title: strings.title, subtitle: strings.note });
+    for (const audience of ["adult", "kids"]) {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.setAttribute("data-cabina-audience", audience);
+      button.textContent = strings[audience];
+      button.style.cssText = [
+        "display:block",
+        "width:100%",
+        "min-height:48px",
+        "margin:0 0 8px",
+        "padding:12px 16px",
+        "border:1px solid #d1d5db",
+        "border-radius:8px",
+        "background:#fff",
+        "color:#1a1a1a",
+        "font-size:15px",
+        "font-weight:600",
+        "font-family:inherit",
+        "text-align:left",
+        "cursor:pointer"
+      ].join(";");
+      button.addEventListener("click", () => onChoice(audience));
+      container.appendChild(button);
+    }
     fragment.appendChild(container);
     return fragment;
   }
@@ -6033,6 +6069,10 @@
   const DOUBLE_TAP_SCALE = 2.5;
   const DRAG_THRESHOLD = 4;
   const DOUBLE_TAP_DELAY = 300;
+  const DOUBLE_TAP_SLOP = 40;
+  function eDoppioTocco(prima, ora) {
+    return ora.t - prima.t < DOUBLE_TAP_DELAY && Math.hypot(ora.x - prima.x, ora.y - prima.y) <= DOUBLE_TAP_SLOP;
+  }
   function createZoomHandler(callbacks) {
     let container = null;
     let currentTransform = { scale: 1, translateX: 0, translateY: 0 };
@@ -6044,7 +6084,7 @@
     let panStartY = 0;
     let panStartTranslateX = 0;
     let panStartTranslateY = 0;
-    let lastTapTime = 0;
+    let lastTap = { t: 0, x: 0, y: 0 };
     let trascinato = false;
     function clampScale(scale) {
       return Math.max(MIN_SCALE, Math.min(MAX_SCALE, scale));
@@ -6178,8 +6218,8 @@
       e.stopPropagation();
     }
     function handleClick(e) {
-      const now = Date.now();
-      if (now - lastTapTime < DOUBLE_TAP_DELAY) {
+      const tap = { t: Date.now(), x: e.clientX, y: e.clientY };
+      if (eDoppioTocco(lastTap, tap)) {
         if (currentTransform.scale > 1.01) {
           updateTransform({ scale: 1, translateX: 0, translateY: 0 });
         } else {
@@ -6187,7 +6227,7 @@
           zoomVerso(DOUBLE_TAP_SCALE, x, y);
         }
       }
-      lastTapTime = now;
+      lastTap = tap;
     }
     function attach(el) {
       detach();
@@ -6440,8 +6480,12 @@
       });
     }
     let isDragging = false;
+    let haTrascinato = false;
+    let pressioneX = 0;
+    let corrente = INITIAL_CLIP_PERCENT;
     function applyClip(percent) {
       const clamped = Math.max(0, Math.min(100, percent));
+      corrente = clamped;
       generatedImg.style.clipPath = buildClipPath(clamped);
       handle.style.left = `${clamped}%`;
       handle.setAttribute("aria-valuenow", String(Math.round(clamped)));
@@ -6449,6 +6493,7 @@
     }
     function onPointerMove(e) {
       if (!isDragging) return;
+      if (Math.abs(e.clientX - pressioneX) > DRAG_THRESHOLD) haTrascinato = true;
       const rect = container.getBoundingClientRect();
       const percent = computeClipPercent(rect, e.clientX);
       applyClip(percent);
@@ -6468,6 +6513,8 @@
       if (isDragging) return;
       e.preventDefault();
       isDragging = true;
+      haTrascinato = false;
+      pressioneX = e.clientX;
       handle.dataset.pointerId = String(e.pointerId);
       try {
         handle.setPointerCapture?.(e.pointerId);
@@ -6480,8 +6527,22 @@
       const percent = computeClipPercent(rect, e.clientX);
       applyClip(percent);
     });
+    let ultimoClick = { t: 0, x: 0, y: 0 };
+    let primaDelClick = INITIAL_CLIP_PERCENT;
     container.addEventListener("click", (e) => {
       if (isDragging) return;
+      if (haTrascinato) {
+        haTrascinato = false;
+        return;
+      }
+      const click = { t: Date.now(), x: e.clientX, y: e.clientY };
+      if (eDoppioTocco(ultimoClick, click)) {
+        ultimoClick = { t: 0, x: 0, y: 0 };
+        applyClip(primaDelClick);
+        return;
+      }
+      ultimoClick = click;
+      primaDelClick = corrente;
       const rect = container.getBoundingClientRect();
       const percent = computeClipPercent(rect, e.clientX);
       applyClip(percent);
@@ -7759,12 +7820,12 @@
     const generiche = tables.filter((t) => t.category === null);
     return generiche.length > 0 ? generiche : [tables[0]];
   }
-  function capoDaBambino(tables, category) {
-    if (tables.length === 0) return false;
+  function perChiIlCapo(tables, category) {
     const kids = (t) => t.audience === "kids";
     const categoriaIgnota = category == null || category === "unknown" || category === "accessory";
-    if (categoriaIgnota && tables.some(kids)) return true;
-    return pickSizeTables(tables, category).every(kids);
+    const candidate = categoriaIgnota ? tables : pickSizeTables(tables, category);
+    if (!candidate.some(kids)) return "adult";
+    return candidate.every(kids) ? "kids" : "ask";
   }
   function recommendFromTables(measures, tables, options) {
     const candidate = pickSizeTables(tables, options?.garment?.category ?? null);
@@ -7853,6 +7914,7 @@
   let garmentAnalysisPending = false;
   let sizeTables;
   let sizeTablesDone = Promise.resolve();
+  let rispostaPerChi;
   let garmentSelectEntryId = 0;
   let lastTryonResultId = null;
   let lastCatalog = null;
@@ -8122,14 +8184,30 @@
           });
           break;
         }
-        if (capoDaBambino(sizeTables ?? [], garmentAnalysis?.category)) {
+        const perChi = perChiIlCapo(sizeTables ?? [], garmentAnalysis?.category);
+        if (perChi === "ask" && rispostaPerChi === void 0) {
+          content.appendChild(createAudienceChoiceScreen(
+            {
+              title: getLocaleStringDefault("audience.title", "Who will wear this?"),
+              note: getLocaleStringDefault("audience.note", "Under 16, the try-on uses a model: no photo is asked for."),
+              adult: getLocaleStringDefault("audience.adult", "An adult (16 or over)"),
+              kids: getLocaleStringDefault("audience.kids", "A child or teen (under 16)")
+            },
+            (scelta) => {
+              rispostaPerChi = scelta;
+              if (widgetContext.state === "photo") renderState(button);
+            }
+          ));
+          break;
+        }
+        if (perChi === "kids" || perChi === "ask" && rispostaPerChi === "kids") {
           content.appendChild(createMoreModelsScreen(
             {
               title: getLocaleString("model_gallery.more_title"),
               subtitle: getLocaleString("model_gallery.more_subtitle")
             },
             (model) => void selezionaModella(model, overlay, button),
-            { models: KIDS_MODELS, bands: KIDS_AGE_BANDS }
+            { models: KIDS_MODELS, bands: KIDS_AGE_BANDS, genderKeys: KIDS_GENDER_LABEL_KEYS }
           ));
           resolveModelThumbs(content, widgetContext.baseUrl ?? "");
           break;
@@ -8630,6 +8708,7 @@
           }).catch(() => {
           });
         }
+        rispostaPerChi = void 0;
         widgetContext = widgetReducer(widgetContext, { type: "OPEN" });
         renderState(button);
       }

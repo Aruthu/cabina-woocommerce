@@ -91,6 +91,8 @@
     "subtitle": "Coba pakaian ini pada orang dengan bentuk tubuh seperti Anda — tanpa perlu foto",
     "gender_female": "Wanita",
     "gender_male": "Pria",
+    "gender_female_kids": "Anak perempuan",
+    "gender_male_kids": "Anak laki-laki",
     "body_slim": "Ramping",
     "body_slim_male": "Ramping",
     "body_regular": "Reguler",
@@ -105,6 +107,12 @@
     "more_title": "Semua model",
     "more_subtitle": "Pilih berdasarkan usia dan bentuk tubuh — tanpa perlu foto",
     "load_error": "Model tidak dapat dimuat, coba lagi atau gunakan foto Anda"
+  },
+  "audience": {
+    "title": "Siapa yang akan memakainya?",
+    "note": "Di bawah 16 tahun, pakaian dicoba pada model: tidak ada foto yang diminta.",
+    "adult": "Dewasa (16 tahun ke atas)",
+    "kids": "Anak atau remaja (di bawah 16 tahun)"
   },
   "garment_select": {
     "title": "Apa yang ingin Anda coba?",

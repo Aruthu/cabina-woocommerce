@@ -693,32 +693,39 @@ export function pickSizeTables<T extends SizeTableCandidate>(
 }
 
 /**
- * Il capo è da bambino? (12/10/2026, decisione di Arou dell'11/10.)
+ * Per chi è il capo: adulto, bambino, o da chiedere a chi compra.
+ * (12/10/2026, decisione di Arou dell'11/10; la domanda è del 13/10.)
  *
- * Lo dice la tabella taglie che vale per il capo — le stesse candidate del
- * consiglio di taglia — quando sono TUTTE `audience: 'kids'`. Allora il widget
- * mostra solo le modelle preset minorenni e non chiede la foto: un minore non
- * può consentire da solo (art. 8 GDPR, soglia 16 anni) e noi non raccogliamo
- * foto di minori. Senza tabelle, o con una tabella adulta fra le candidate, il
- * capo è da adulto e tutto resta com'era.
+ * Lo dicono le tabelle taglie che valgono per il capo, le stesse candidate del
+ * consiglio di taglia:
+ *  - tutte `audience: 'kids'` → `'kids'`: il widget mostra solo le modelle
+ *    preset minorenni e non chiede la foto. Un minore non può consentire da
+ *    solo (art. 8 GDPR, soglia 16 anni) e noi non raccogliamo foto di minori;
+ *  - nessuna `kids`, o nessuna tabella → `'adult'`: tutto resta com'era;
+ *  - di tutti e due i tipi → `'ask'`: il widget domanda chi lo indosserà, e
+ *    sotto i 16 anni mostra solo le modelle preset.
  *
- * Se il merchant ha tabelle di entrambi e la categoria del capo non si sa
- * (analisi fallita, accessorio), si chiude dal lato del minore: capo da bambino.
- * Rilievo di Kilo sulla #317: prima decideva l'ordine di caricamento.
+ * `'ask'` nasce perché la tabella è per categoria e non per prodotto: un
+ * merchant con «maglie adulti» e «maglie bambini» ha un capo ambiguo. Prima
+ * vinceva l'adulto, e su un capo da bambino il widget chiedeva la foto.
  *
- * shortcut: la tabella è per categoria e non per prodotto, quindi un merchant
- * con «maglie adulti» e «maglie bambini» ha un capo ambiguo e qui vince
- * l'adulto; si supera quando il merchant potrà legare la tabella al prodotto.
+ * Con la categoria ignota (analisi fallita, accessorio) valgono tutte le
+ * tabelle del merchant. Prima della domanda un negozio misto si chiudeva dal
+ * lato del minore (rilievo di Kilo sulla #317), e un adulto restava con le
+ * sole modelle minorenni: ora si chiede anche lì (rilievo di Kilo sulla #320).
+ *
+ * shortcut: la domanda si fida della risposta, come ogni dichiarazione d'età;
+ * si supera quando il merchant potrà legare la tabella al prodotto.
  */
-export function capoDaBambino(
+export function perChiIlCapo(
   tables: ReadonlyArray<SizeTableCandidate & { audience?: SizeTableAudience | null }>,
   category: GarmentCategory | null | undefined,
-): boolean {
-  if (tables.length === 0) return false;
+): 'adult' | 'kids' | 'ask' {
   const kids = (t: { audience?: SizeTableAudience | null }) => t.audience === 'kids';
   const categoriaIgnota = category == null || category === 'unknown' || category === 'accessory';
-  if (categoriaIgnota && tables.some(kids)) return true;
-  return pickSizeTables(tables, category).every(kids);
+  const candidate = categoriaIgnota ? tables : pickSizeTables(tables, category);
+  if (!candidate.some(kids)) return 'adult';
+  return candidate.every(kids) ? 'kids' : 'ask';
 }
 
 /**

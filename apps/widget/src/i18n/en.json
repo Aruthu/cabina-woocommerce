@@ -91,6 +91,8 @@
     "subtitle": "Try the item on a model with a similar body type — no photo needed",
     "gender_female": "Women",
     "gender_male": "Men",
+    "gender_female_kids": "Girls",
+    "gender_male_kids": "Boys",
     "body_slim": "Slim",
     "body_slim_male": "Slim",
     "body_regular": "Regular",
@@ -105,6 +107,12 @@
     "more_title": "All models",
     "more_subtitle": "Choose by age and body type — no photo needed",
     "load_error": "Couldn't load the model, try again or use your photo"
+  },
+  "audience": {
+    "title": "Who will wear this?",
+    "note": "Under 16, the try-on uses a model: no photo is asked for.",
+    "adult": "An adult (16 or over)",
+    "kids": "A child or teen (under 16)"
   },
   "garment_select": {
     "title": "What are you trying on?",

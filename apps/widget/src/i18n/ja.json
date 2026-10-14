@@ -91,6 +91,8 @@
     "subtitle": "あなたに近い体型の人で試着できます — 写真は不要です",
     "gender_female": "女性",
     "gender_male": "男性",
+    "gender_female_kids": "女の子",
+    "gender_male_kids": "男の子",
     "body_slim": "スリム",
     "body_slim_male": "スリム",
     "body_regular": "レギュラー",
@@ -105,6 +107,12 @@
     "more_title": "すべてのモデル",
     "more_subtitle": "年齢と体型で選べます — 写真は不要です",
     "load_error": "モデルを読み込めませんでした。もう一度お試しいただくか、ご自身の写真をお使いください"
+  },
+  "audience": {
+    "title": "どなたが着用しますか？",
+    "note": "16歳未満の場合はモデルで試着します。写真は必要ありません。",
+    "adult": "大人（16歳以上）",
+    "kids": "お子様・ティーン（16歳未満）"
   },
   "garment_select": {
     "title": "何を試着しますか？",

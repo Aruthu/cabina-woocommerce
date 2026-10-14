@@ -91,6 +91,8 @@
     "subtitle": "Probieren Sie den Artikel an einem Modell mit ähnlicher Figur — kein Foto nötig",
     "gender_female": "Damen",
     "gender_male": "Herren",
+    "gender_female_kids": "Mädchen",
+    "gender_male_kids": "Jungen",
     "body_slim": "Schmal",
     "body_slim_male": "Schmal",
     "body_regular": "Standard",
@@ -105,6 +107,12 @@
     "more_title": "Alle Modelle",
     "more_subtitle": "Wählen Sie nach Alter und Figur — kein Foto nötig",
     "load_error": "Modell konnte nicht geladen werden, erneut versuchen oder eigenes Foto nutzen"
+  },
+  "audience": {
+    "title": "Wer wird das tragen?",
+    "note": "Unter 16 Jahren erfolgt die Anprobe an einem Model: Es wird kein Foto verlangt.",
+    "adult": "Eine erwachsene Person (ab 16 Jahren)",
+    "kids": "Ein Kind oder Teenager (unter 16 Jahren)"
   },
   "garment_select": {
     "title": "Was probieren Sie an?",

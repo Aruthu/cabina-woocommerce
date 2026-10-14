@@ -9,7 +9,7 @@ import {
   type PresetModel,
   type AgeBand,
 } from './presets';
-import { getLocaleString } from '../../i18n/i18n';
+import { getLocaleString, getLocaleStringOr } from '../../i18n/i18n';
 
 /**
  * Story 12.2 — Libreria modelle predefinite (AC2) e conversione in data URL (AC1).
@@ -219,7 +219,13 @@ export function createMoreModelsScreen(
   onModelSelected: (model: PresetModel) => void,
   // Il set da mostrare: le 32 adulte di default, le 18 minorenni su un capo da
   // bambino (12/10/2026). Stessa schermata, stessi gruppi «genere · fascia».
-  set: { models: readonly PresetModel[]; bands: readonly AgeBand[] } = { models: MORE_MODELS, bands: AGE_BANDS },
+  // `genderKeys`: le intestazioni dei minorenni («Girls», non «Women»), con
+  // ripiego su quelle adulte finché il locale in cache non le ha.
+  set: {
+    models: readonly PresetModel[];
+    bands: readonly AgeBand[];
+    genderKeys?: Record<PresetModel['gender'], string>;
+  } = { models: MORE_MODELS, bands: AGE_BANDS },
 ): DocumentFragment {
   const fragment = document.createDocumentFragment();
 
@@ -233,7 +239,9 @@ export function createMoreModelsScreen(
       if (models.length === 0) continue;
       appendGroup(
         container,
-        `${getLocaleString(GENDER_LABEL_KEYS[gender])} · ${ageBandLabel(band)}`,
+        `${set.genderKeys
+          ? getLocaleStringOr(set.genderKeys[gender], GENDER_LABEL_KEYS[gender])
+          : getLocaleString(GENDER_LABEL_KEYS[gender])} · ${ageBandLabel(band)}`,
         `${gender}-${band}`,
         models,
         onModelSelected,
@@ -242,6 +250,59 @@ export function createMoreModelsScreen(
   }
 
   appendErrorArea(container);
+
+  fragment.appendChild(container);
+  return fragment;
+}
+
+/** Testi della schermata «chi lo indosserà?». */
+export interface AudienceChoiceStrings {
+  title: string;
+  note: string;
+  adult: string;
+  kids: string;
+}
+
+/**
+ * «Chi lo indosserà?» (13/10/2026): la schermata che precede la foto quando per
+ * il capo valgono sia una tabella taglie da adulti sia una da bambini, e quindi
+ * il widget non può sapere da solo se il capo è da bambino. Prima vinceva
+ * l'adulto e a un minore si poteva chiedere la foto; ora lo dice chi compra, e
+ * sotto i 16 anni si va alle modelle preset senza caricamento.
+ */
+export function createAudienceChoiceScreen(
+  strings: AudienceChoiceStrings,
+  onChoice: (audience: 'adult' | 'kids') => void,
+): DocumentFragment {
+  const fragment = document.createDocumentFragment();
+  const container = document.createElement('div');
+  container.setAttribute('data-cabina-audience-choice', '');
+  appendHeading(container, { title: strings.title, subtitle: strings.note });
+
+  for (const audience of ['adult', 'kids'] as const) {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.setAttribute('data-cabina-audience', audience);
+    button.textContent = strings[audience];
+    button.style.cssText = [
+      'display:block',
+      'width:100%',
+      'min-height:48px',
+      'margin:0 0 8px',
+      'padding:12px 16px',
+      'border:1px solid #d1d5db',
+      'border-radius:8px',
+      'background:#fff',
+      'color:#1a1a1a',
+      'font-size:15px',
+      'font-weight:600',
+      'font-family:inherit',
+      'text-align:left',
+      'cursor:pointer',
+    ].join(';');
+    button.addEventListener('click', () => onChoice(audience));
+    container.appendChild(button);
+  }
 
   fragment.appendChild(container);
   return fragment;

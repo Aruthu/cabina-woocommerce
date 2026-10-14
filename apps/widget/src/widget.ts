@@ -16,11 +16,11 @@ import {
   shouldAttemptGenerative,
   CURRENT_PHOTO_CONSENT_VERSION,
 } from './features/photo-consent/photo-consent-storage';
-import { createModelGallery, createMoreModelsScreen, resolveModelThumbs, setModelError, fetchModelAsDataUrl } from './features/model-gallery/model-gallery';
-import { KIDS_MODELS, KIDS_AGE_BANDS, type PresetModel } from './features/model-gallery/presets';
+import { createModelGallery, createMoreModelsScreen, createAudienceChoiceScreen, resolveModelThumbs, setModelError, fetchModelAsDataUrl } from './features/model-gallery/model-gallery';
+import { KIDS_MODELS, KIDS_AGE_BANDS, KIDS_GENDER_LABEL_KEYS, type PresetModel } from './features/model-gallery/presets';
 import { createGarmentSelect, resolvePageGarmentParams, type PageGarmentParams } from './features/garment-select/garment-select';
 import { showTryOnOverlay, removeTryOnOverlay, updateSizeBadge, setShowSizeScore } from './features/tryon/tryon-overlay';
-import { recommendFromTables, stimaPiedeDaAltezza, capoDaBambino } from './features/size/size-recommendation';
+import { recommendFromTables, stimaPiedeDaAltezza, perChiIlCapo } from './features/size/size-recommendation';
 import { fetchSizeTables, type SizeTableResult } from './api/widget-api';
 import {
   segnaProvaNelForm,
@@ -108,6 +108,7 @@ export function __resetWidgetForTesting(): void {
   garmentAnalysisPending = false;
   sizeTables = undefined;
   sizeTablesDone = Promise.resolve();
+  rispostaPerChi = undefined;
   __resetAttribuzioneForTesting();
 }
 let currentLang: WidgetLanguage | null = null;
@@ -154,6 +155,10 @@ let garmentAnalysisPending = false;
 // non ancora arrivate; `null` = la chiamata è fallita (il capo passa per adulto).
 let sizeTables: SizeTableResult[] | null | undefined;
 let sizeTablesDone: Promise<void> = Promise.resolve();
+// La risposta a «chi lo indosserà?» sul capo ambiguo (vedi `perChiIlCapo`).
+// Vale finché la cabina resta aperta: a ogni apertura si richiede, perché lo
+// stesso telefono può passare da un genitore a un figlio.
+let rispostaPerChi: 'adult' | 'kids' | undefined;
 /** Ingresso corrente nello step "Cosa provi" (vedi il case 'garment_select'). */
 let garmentSelectEntryId = 0;
 // Story 12.4 (Task 5.3): resultId dell'ultima generazione try-on, tracciato
@@ -528,14 +533,32 @@ function renderState(button: HTMLElement): void {
         });
         break;
       }
-      if (capoDaBambino(sizeTables ?? [], garmentAnalysis?.category)) {
+      const perChi = perChiIlCapo(sizeTables ?? [], garmentAnalysis?.category);
+      if (perChi === 'ask' && rispostaPerChi === undefined) {
+        // Testi nuovi: l'inglese di ripiego copre la finestra in cui il bundle
+        // è già quello nuovo e il locale in cache no.
+        content.appendChild(createAudienceChoiceScreen(
+          {
+            title: getLocaleStringDefault('audience.title', 'Who will wear this?'),
+            note: getLocaleStringDefault('audience.note', 'Under 16, the try-on uses a model: no photo is asked for.'),
+            adult: getLocaleStringDefault('audience.adult', 'An adult (16 or over)'),
+            kids: getLocaleStringDefault('audience.kids', 'A child or teen (under 16)'),
+          },
+          (scelta) => {
+            rispostaPerChi = scelta;
+            if (widgetContext.state === 'photo') renderState(button);
+          },
+        ));
+        break;
+      }
+      if (perChi === 'kids' || (perChi === 'ask' && rispostaPerChi === 'kids')) {
         content.appendChild(createMoreModelsScreen(
           {
             title: getLocaleString('model_gallery.more_title'),
             subtitle: getLocaleString('model_gallery.more_subtitle'),
           },
           (model) => void selezionaModella(model, overlay, button),
-          { models: KIDS_MODELS, bands: KIDS_AGE_BANDS },
+          { models: KIDS_MODELS, bands: KIDS_AGE_BANDS, genderKeys: KIDS_GENDER_LABEL_KEYS },
         ));
         resolveModelThumbs(content, widgetContext.baseUrl ?? '');
         break;
@@ -1295,6 +1318,7 @@ function injectButton(config: WidgetPublicConfig): void {
           currentSessionId = r.sessionId ?? null;
         }).catch(() => {});
       }
+      rispostaPerChi = undefined;
       widgetContext = widgetReducer(widgetContext, { type: 'OPEN' });
       renderState(button);
     }

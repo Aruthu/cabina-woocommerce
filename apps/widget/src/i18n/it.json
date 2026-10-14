@@ -91,6 +91,8 @@
     "subtitle": "Prova il capo su una persona con la tua corporatura — nessuna foto necessaria",
     "gender_female": "Donna",
     "gender_male": "Uomo",
+    "gender_female_kids": "Ragazza",
+    "gender_male_kids": "Ragazzo",
     "body_slim": "Snella",
     "body_slim_male": "Snello",
     "body_regular": "Normale",
@@ -105,6 +107,12 @@
     "more_title": "Tutti i modelli",
     "more_subtitle": "Scegli per età e corporatura — nessuna foto necessaria",
     "load_error": "Impossibile caricare il modello, riprova o usa la tua foto"
+  },
+  "audience": {
+    "title": "Chi lo indosserà?",
+    "note": "Sotto i 16 anni la prova si fa su un modello: nessuna foto richiesta.",
+    "adult": "Un adulto (16 anni o più)",
+    "kids": "Un bambino o un ragazzo (meno di 16 anni)"
   },
   "garment_select": {
     "title": "Cosa provi?",

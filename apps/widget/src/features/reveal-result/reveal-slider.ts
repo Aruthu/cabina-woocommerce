@@ -13,6 +13,7 @@
  */
 
 import { getLocaleString, getLocaleStringOr } from '../../i18n/i18n';
+import { DRAG_THRESHOLD, eDoppioTocco } from '../tryon/zoom-handler';
 
 export interface RevealSliderCallbacks {
   /** Chiamato quando l'utente sposta la maniglia (per persistenza stato, se serve). */
@@ -259,9 +260,15 @@ export function createRevealSlider(
 
   // ── Pointer events (desktop + touch unificati) ──────────────────────────
   let isDragging = false;
+  // Il puntatore si è mosso con la maniglia premuta: il click che segue chiude
+  // un trascinamento, non è un tocco.
+  let haTrascinato = false;
+  let pressioneX = 0;
+  let corrente = INITIAL_CLIP_PERCENT;
 
   function applyClip(percent: number): void {
     const clamped = Math.max(0, Math.min(100, percent));
+    corrente = clamped;
     generatedImg.style.clipPath = buildClipPath(clamped);
     handle.style.left = `${clamped}%`;
     handle.setAttribute('aria-valuenow', String(Math.round(clamped)));
@@ -270,6 +277,8 @@ export function createRevealSlider(
 
   function onPointerMove(e: PointerEvent): void {
     if (!isDragging) return;
+    // Sotto la soglia è il tremolio di un dito che tocca, non un trascinamento.
+    if (Math.abs(e.clientX - pressioneX) > DRAG_THRESHOLD) haTrascinato = true;
     const rect = container.getBoundingClientRect();
     const percent = computeClipPercent(rect, e.clientX);
     applyClip(percent);
@@ -294,6 +303,8 @@ export function createRevealSlider(
     if (isDragging) return;
     e.preventDefault();
     isDragging = true;
+    haTrascinato = false;
+    pressioneX = e.clientX;
     handle.dataset.pointerId = String(e.pointerId);
     try {
       handle.setPointerCapture?.(e.pointerId);
@@ -312,9 +323,36 @@ export function createRevealSlider(
     applyClip(percent);
   });
 
-  // Click sul container (non solo sulla maniglia) sposta la clip lì
+  // Click sul container (non solo sulla maniglia) sposta la clip lì.
+  //
+  // ⚠️ Il doppio tocco è dello zoom (zoom-handler), e ogni suo tocco è anche un
+  // click: la riga finiva nel punto toccato, cioè in mezzo al dettaglio appena
+  // ingrandito, metà prova e metà foto di partenza (13/10/2026). Il secondo
+  // click riporta quindi la riga dov'era prima del primo. Ritardare il primo di
+  // 300 ms toglierebbe anche il mezzo passo, ma renderebbe lento ogni tocco singolo.
+  let ultimoClick = { t: 0, x: 0, y: 0 };
+  let primaDelClick = INITIAL_CLIP_PERCENT;
   container.addEventListener('click', (e: MouseEvent) => {
     if (isDragging) return;
+    // Il click che chiude un trascinamento della maniglia: la riga è già al suo
+    // posto, e contarlo come primo tocco farebbe annullare il trascinamento dopo.
+    // ⚠️ Non «il click è sulla maniglia»: dopo il primo tocco la maniglia è
+    // proprio sotto il dito, e il secondo tocco cade su di lei (visto nel
+    // browser: con quel controllo la riga restava nel punto toccato).
+    if (haTrascinato) {
+      haTrascinato = false;
+      return;
+    }
+    // Lo stesso criterio dello zoom (`eDoppioTocco`): vicini nel tempo E nello
+    // spazio. Due tocchi rapidi in punti diversi restano due spostamenti.
+    const click = { t: Date.now(), x: e.clientX, y: e.clientY };
+    if (eDoppioTocco(ultimoClick, click)) {
+      ultimoClick = { t: 0, x: 0, y: 0 };
+      applyClip(primaDelClick);
+      return;
+    }
+    ultimoClick = click;
+    primaDelClick = corrente;
     const rect = container.getBoundingClientRect();
     const percent = computeClipPercent(rect, e.clientX);
     applyClip(percent);

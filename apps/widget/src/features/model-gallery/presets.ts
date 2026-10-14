@@ -39,7 +39,7 @@
  * 2026-10-12 (Arou): **18 modelle MINORENNI** (`KIDS_MODELS`), 7–15 anni: 3 fasce ×
  * 2 generi × slim/regular/sturdy. Si vedono SOLO su un capo da bambino, cioè quando
  * la tabella taglie del merchant che vale per il capo è `audience: 'kids'`
- * (`capoDaBambino` in size-recommendation.ts), e lì sono l'unica via: niente foto
+ * (`perChiIlCapo` in size-recommendation.ts), e lì sono l'unica via: niente foto
  * propria, perché un minore non può consentire da solo (art. 8 GDPR, soglia 16).
  * Brief in `genera_minorenni.py`, asset da `asset_cdn.py minorenni_candidate/scelte`.
  */
@@ -164,6 +164,14 @@ export function ageBandLabel(band: AgeBand): string {
 export const GENDER_LABEL_KEYS: Record<ModelGender, string> = {
   female: 'model_gallery.gender_female',
   male: 'model_gallery.gender_male',
+};
+
+/** Le stesse intestazioni per le 18 minorenni: «Girls · 7–9», non «Women · 7–9»
+ *  (13/10/2026). Chiavi nuove: chi le legge ricade su quelle sopra finché il
+ *  locale in cache non le ha. */
+export const KIDS_GENDER_LABEL_KEYS: Record<ModelGender, string> = {
+  female: 'model_gallery.gender_female_kids',
+  male: 'model_gallery.gender_male_kids',
 };
 
 /** Generi presenti nel set, nell'ordine di rendering. */

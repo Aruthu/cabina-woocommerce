@@ -72,8 +72,21 @@ const ZOOM_SENSITIVITY = 0.001; // wheel delta multiplier
 /** Quanto ingrandisce un doppio tap a 1×: abbastanza da vedere una scarpa, non da perdersi. */
 const DOUBLE_TAP_SCALE = 2.5;
 /** Oltre questi px un pointerdown→pointerup è un trascinamento, non un click. */
-const DRAG_THRESHOLD = 4;
-const DOUBLE_TAP_DELAY = 300; // ms per riconoscere doppio tap
+export const DRAG_THRESHOLD = 4;
+export const DOUBLE_TAP_DELAY = 300; // ms per riconoscere doppio tap
+/** Due tocchi sono un doppio tocco solo se cadono vicini: due tocchi rapidi in
+ *  punti diversi sono due tocchi (rilievo di Kilo sulla #320). Lo usa anche il
+ *  reveal slider: i due devono riconoscere lo stesso gesto, o la riga del
+ *  confronto si sposta mentre lo zoom scatta. */
+export const DOUBLE_TAP_SLOP = 40; // px
+
+/** Il secondo di due tocchi vicini nel tempo e nello spazio. */
+export function eDoppioTocco(
+  prima: { t: number; x: number; y: number },
+  ora: { t: number; x: number; y: number },
+): boolean {
+  return ora.t - prima.t < DOUBLE_TAP_DELAY && Math.hypot(ora.x - prima.x, ora.y - prima.y) <= DOUBLE_TAP_SLOP;
+}
 
 export function createZoomHandler(callbacks: ZoomCallbacks): ZoomHandler {
   let container: HTMLElement | null = null;
@@ -92,7 +105,7 @@ export function createZoomHandler(callbacks: ZoomCallbacks): ZoomHandler {
   let panStartTranslateY = 0;
 
   // State per doppio tap
-  let lastTapTime = 0;
+  let lastTap = { t: 0, x: 0, y: 0 };
 
   // Un trascinamento per spostarsi nello zoom finisce con un click: senza
   // fermarlo, il reveal slider lo leggeva come «sposta qui la maniglia» e
@@ -291,8 +304,8 @@ export function createZoomHandler(callbacks: ZoomCallbacks): ZoomHandler {
   // ── Doppio tap: ingrandisce sul punto, o torna a 1× ──────────────────
 
   function handleClick(e: MouseEvent): void {
-    const now = Date.now();
-    if (now - lastTapTime < DOUBLE_TAP_DELAY) {
+    const tap = { t: Date.now(), x: e.clientX, y: e.clientY };
+    if (eDoppioTocco(lastTap, tap)) {
       if (currentTransform.scale > 1.01) {
         updateTransform({ scale: 1, translateX: 0, translateY: 0 });
       } else {
@@ -300,7 +313,7 @@ export function createZoomHandler(callbacks: ZoomCallbacks): ZoomHandler {
         zoomVerso(DOUBLE_TAP_SCALE, x, y);
       }
     }
-    lastTapTime = now;
+    lastTap = tap;
   }
 
   // ── Public API ────────────────────────────────────────────────────────

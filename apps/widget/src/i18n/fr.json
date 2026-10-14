@@ -91,6 +91,8 @@
     "subtitle": "Essayez l'article sur un mannequin à la morphologie similaire — aucune photo requise",
     "gender_female": "Femme",
     "gender_male": "Homme",
+    "gender_female_kids": "Fille",
+    "gender_male_kids": "Garçon",
     "body_slim": "Mince",
     "body_slim_male": "Mince",
     "body_regular": "Standard",
@@ -105,6 +107,12 @@
     "more_title": "Tous les mannequins",
     "more_subtitle": "Choisissez selon l'âge et la morphologie — aucune photo requise",
     "load_error": "Impossible de charger le mannequin, réessayez ou utilisez votre photo"
+  },
+  "audience": {
+    "title": "Qui va le porter ?",
+    "note": "Avant 16 ans, l'essayage se fait sur un mannequin : aucune photo n'est demandée.",
+    "adult": "Un adulte (16 ans ou plus)",
+    "kids": "Un enfant ou un ado (moins de 16 ans)"
   },
   "garment_select": {
     "title": "Que essayez-vous ?",

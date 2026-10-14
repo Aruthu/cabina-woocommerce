@@ -84,6 +84,9 @@ export interface LocaleDict {
     /** Intestazioni dei due gruppi della galleria (set a 8 modelli, 2026-07-26). */
     gender_female: string;
     gender_male: string;
+    /** Le stesse intestazioni per le modelle minorenni (13/10/2026). */
+    gender_female_kids: string;
+    gender_male_kids: string;
     body_slim: string;
     body_regular: string;
     body_curvy: string;
@@ -98,6 +101,13 @@ export interface LocaleDict {
     more_title: string;
     more_subtitle: string;
     load_error: string;
+  };
+  /** «Chi lo indosserà?»: capo con tabelle taglie da adulti e da bambini (13/10/2026). */
+  audience: {
+    title: string;
+    note: string;
+    adult: string;
+    kids: string;
   };
   garment_select: {
     title: string;
