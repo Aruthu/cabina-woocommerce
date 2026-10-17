@@ -98,7 +98,10 @@ export function createRevealSlider(
     'width:100%',
     'height:100%',
     'overflow:hidden',
-    'touch-action:none', // impedisce scroll/gesture del browser durante il drag
+    // 17/10/2026: `pan-y`, non `none` — un dito in verticale sopra la prova
+    // scorre la pagina. Il drag della maniglia è protetto sulla maniglia stessa,
+    // e da ingrandita lo zoom mette `none` sul contenitore (vince il più stretto).
+    'touch-action:pan-y',
     'user-select:none',
   ].join(';');
 
@@ -154,6 +157,7 @@ export function createRevealSlider(
     'background:#fff',
     'box-shadow:0 0 8px rgba(0,0,0,0.4)',
     'cursor:ew-resize',
+    'touch-action:none', // trascinata un po' in diagonale non deve scorrere la pagina
     'z-index:2',
     // `--cabina-zoom` lo scrive la prova quando si zooma (27/09): la riga, il
     // pomello e l'etichetta seguono il punto del confronto ma non si ingrandiscono.
@@ -221,17 +225,22 @@ export function createRevealSlider(
   // si servono a parte e hanno la loro cache — una chiave nuova non c'è ancora.
   // Il ripiego è una stringa che esiste da prima e dice comunque cos'è.
   hint.textContent = `↔  ${getLocaleStringOr('reveal_result.drag_hint', 'reveal_result.slider_label')}`;
-  // ⚠️ In ALTO, non in basso: sotto c'è il badge della taglia consigliata, e
-  // un'etichetta che ora resta per sempre gli finiva sopra coprendo la riga
-  // «55% di affidabilità». Finché spariva dopo tre secondi la collisione non si
-  // vedeva — renderla permanente l'ha resa visibile. In alto gli angoli sono
-  // occupati da «indietro» e «chiudi», ma il centro è libero.
+  // ⚠️ In BASSO A SINISTRA. In alto al centro (fino al 14/10/2026) copriva la
+  // testa della persona: nelle foto in piedi il viso sta proprio lì (Arou, dal
+  // telefono su sole-completo). In basso a destra stanno il badge della taglia
+  // a tutto schermo (max-width 70%) e il bottone «ingrandisci»; in basso a
+  // sinistra ci sono i piedi e la strada, e niente altro.
+  // shortcut: a tutto schermo su un telefono stretto il badge può arrivare
+  // fin qui sotto; se si vede, il badge va messo sotto l'immagine anche lì.
   hint.style.cssText = [
     'position:absolute',
-    'left:50%',
-    'top:16px',
-    'transform:translateX(-50%) scale(calc(1 / var(--cabina-zoom, 1)))',
-    'transform-origin:top center',
+    'left:16px',
+    'bottom:16px',
+    'max-width:calc(100% - 32px)',
+    'overflow:hidden',
+    'text-overflow:ellipsis',
+    'transform:scale(calc(1 / var(--cabina-zoom, 1)))',
+    'transform-origin:bottom left',
     'padding:6px 12px',
     'border-radius:999px',
     'background:rgba(0,0,0,0.6)',

@@ -3625,6 +3625,15 @@
   }).refine((r) => r.hipsMin <= r.hipsMax, {
     message: "hipsMin deve essere <= hipsMax",
     path: ["hipsMin"]
+  }).refine((r) => r.bustMax === 0 || r.bustMax >= 45, {
+    message: "Sembrano pollici: inserisci i centimetri",
+    path: ["bustMax"]
+  }).refine((r) => r.waistMax === 0 || r.waistMax >= 45, {
+    message: "Sembrano pollici: inserisci i centimetri",
+    path: ["waistMax"]
+  }).refine((r) => r.hipsMax === 0 || r.hipsMax >= 45, {
+    message: "Sembrano pollici: inserisci i centimetri",
+    path: ["hipsMax"]
   });
   const SizeTableDataSchema = arrayType(SizeTableRowSchema).min(1, "La tabella deve contenere almeno una riga").max(100, "Massimo 100 righe per tabella");
   objectType({
@@ -3632,12 +3641,6 @@
     data: SizeTableDataSchema,
     category: SizeTableCategorySchema.nullable().optional(),
     audience: SizeTableAudienceSchema.default("adult")
-  });
-  enumType(["front", "right", "back", "left"]);
-  const PRODUCT_URL_MAX_LENGTH = 2048;
-  const ProductPageUrlSchema = stringType({ required_error: "productPageUrl mancante" }).trim().min(1, "productPageUrl mancante").max(PRODUCT_URL_MAX_LENGTH, "productPageUrl troppo lungo");
-  objectType({
-    productPageUrl: ProductPageUrlSchema
   });
   const PhotoConsentSchema = objectType({
     given: booleanType(),
@@ -4062,9 +4065,6 @@
     })();
     inFlightLocales.set(lang, promise);
     return promise.finally(() => inFlightLocales.delete(lang));
-  }
-  function getCurrentLanguage() {
-    return currentLocaleLang;
   }
   function getLocaleStringOr(key, fallbackKey, vars) {
     const value = getLocaleString(key, vars);
@@ -5267,7 +5267,7 @@
       };
       const out = {};
       const setIf = (name, value) => {
-        if (value != null) out[name] = value;
+        if (value != null && value >= FIELD_CONFIG[name].min && value <= FIELD_CONFIG[name].max) out[name] = value;
       };
       setIf("heightCm", getVal(fields.heightCm));
       setIf("weightKg", getVal(fields.weightKg));
@@ -6070,6 +6070,9 @@
   const DRAG_THRESHOLD = 4;
   const DOUBLE_TAP_DELAY = 300;
   const DOUBLE_TAP_SLOP = 40;
+  function gestiDelBrowser(scale) {
+    return scale > 1.01 ? "none" : "pan-y";
+  }
   function eDoppioTocco(prima, ora) {
     return ora.t - prima.t < DOUBLE_TAP_DELAY && Math.hypot(ora.x - prima.x, ora.y - prima.y) <= DOUBLE_TAP_SLOP;
   }
@@ -6086,6 +6089,9 @@
     let panStartTranslateY = 0;
     let lastTap = { t: 0, x: 0, y: 0 };
     let trascinato = false;
+    function dallaManiglia(e) {
+      return !!e.target?.closest?.("[data-cabina-reveal-handle]");
+    }
     function clampScale(scale) {
       return Math.max(MIN_SCALE, Math.min(MAX_SCALE, scale));
     }
@@ -6106,6 +6112,7 @@
         currentTransform.translateX = Math.max(x0, Math.min(x1, currentTransform.translateX));
         currentTransform.translateY = Math.max(y0, Math.min(y1, currentTransform.translateY));
       }
+      if (container) container.style.touchAction = gestiDelBrowser(currentTransform.scale);
       callbacks.onTransformChange({ ...currentTransform });
     }
     function misureDelContenitore() {
@@ -6127,6 +6134,7 @@
       updateTransform({ scale: s2, translateX: x - s2 * px, translateY: y - s2 * py });
     }
     function handleWheel(e) {
+      if (!e.ctrlKey) return;
       e.preventDefault();
       const delta = -e.deltaY * ZOOM_SENSITIVITY;
       const { x, y } = puntoNelContenitore(e.clientX, e.clientY);
@@ -6145,6 +6153,7 @@
       );
     }
     function handleTouchStart(e) {
+      if (e.touches.length === 1 && dallaManiglia(e)) return;
       if (e.touches.length === 2) {
         isPinching = true;
         pinchStartDist = getTouchDistance(e.touches);
@@ -6186,6 +6195,7 @@
     let pointerStartTy = 0;
     function handlePointerDown(e) {
       if (e.button !== 0) return;
+      if (dallaManiglia(e)) return;
       if (currentTransform.scale <= 1.01) return;
       pointerPanning = true;
       trascinato = false;
@@ -6243,7 +6253,7 @@
       el.addEventListener("pointercancel", handlePointerUp);
       el.addEventListener("dragstart", handleDragStart);
       el.style.userSelect = "none";
-      el.style.touchAction = "none";
+      el.style.touchAction = gestiDelBrowser(currentTransform.scale);
       el.addEventListener("click", handleClick);
       el.addEventListener("click", handleClickCapture, true);
     }
@@ -6349,8 +6359,10 @@
       "width:100%",
       "height:100%",
       "overflow:hidden",
-      "touch-action:none",
-      // impedisce scroll/gesture del browser durante il drag
+      // 17/10/2026: `pan-y`, non `none` — un dito in verticale sopra la prova
+      // scorre la pagina. Il drag della maniglia è protetto sulla maniglia stessa,
+      // e da ingrandita lo zoom mette `none` sul contenitore (vince il più stretto).
+      "touch-action:pan-y",
       "user-select:none"
     ].join(";");
     const originalImg = document.createElement("img");
@@ -6403,6 +6415,8 @@
       "background:#fff",
       "box-shadow:0 0 8px rgba(0,0,0,0.4)",
       "cursor:ew-resize",
+      "touch-action:none",
+      // trascinata un po' in diagonale non deve scorrere la pagina
       "z-index:2",
       // `--cabina-zoom` lo scrive la prova quando si zooma (27/09): la riga, il
       // pomello e l'etichetta seguono il punto del confronto ma non si ingrandiscono.
@@ -6456,10 +6470,13 @@
     hint.textContent = `↔  ${getLocaleStringOr("reveal_result.drag_hint", "reveal_result.slider_label")}`;
     hint.style.cssText = [
       "position:absolute",
-      "left:50%",
-      "top:16px",
-      "transform:translateX(-50%) scale(calc(1 / var(--cabina-zoom, 1)))",
-      "transform-origin:top center",
+      "left:16px",
+      "bottom:16px",
+      "max-width:calc(100% - 32px)",
+      "overflow:hidden",
+      "text-overflow:ellipsis",
+      "transform:scale(calc(1 / var(--cabina-zoom, 1)))",
+      "transform-origin:bottom left",
       "padding:6px 12px",
       "border-radius:999px",
       "background:rgba(0,0,0,0.6)",
@@ -7577,6 +7594,14 @@
   const CATEGORY_WEIGHT_EXTRA = 0.5;
   const LOOSE_WEIGHT = 0.5;
   const FIT_MARGIN_CM = 2;
+  const MISURA = { height: "heightCm", bust: "bustCm", waist: "waistCm", hips: "hipsCm", foot: "footCm" };
+  const COLONNE = {
+    height: ["heightMin", "heightMax"],
+    bust: ["bustMin", "bustMax"],
+    waist: ["waistMin", "waistMax"],
+    hips: ["hipsMin", "hipsMax"],
+    foot: ["footMin", "footMax"]
+  };
   function dimensioniChiave(category) {
     switch (category) {
       case "top":
@@ -7752,7 +7777,9 @@
     if (options?.footEstimated && !usaIlPiede(sizeTable)) {
       options = { ...options, footEstimated: false };
     }
-    if (measures.heightCm <= 0 || measures.bustCm <= 0 || measures.waistCm <= 0 || measures.hipsCm <= 0) {
+    if (["height", "bust", "waist", "hips"].some(
+      (d) => sizeTable.some((r) => rangeDi(measures, r, d)) && measures[MISURA[d]] <= 0
+    )) {
       return null;
     }
     const exactMatches = sizeTable.filter((row) => measuresMatchRow(measures, row));
@@ -7828,23 +7855,50 @@
     return candidate.every(kids) ? "kids" : "ask";
   }
   function recommendFromTables(measures, tables, options) {
-    const candidate = pickSizeTables(tables, options?.garment?.category ?? null);
+    const tutte = pickSizeTables(tables, options?.garment?.category ?? null);
+    const delPubblico = options?.perChi ? tutte.filter((t) => t.audience === "kids" === (options.perChi === "kids")) : tutte;
+    const candidate = delPubblico.length > 0 ? delPubblico : tutte;
+    const chiave = dimensioniChiave(options?.garment?.category);
+    const piene = {
+      heightCm: measures.heightCm ?? 0,
+      bustCm: measures.bustCm ?? 0,
+      waistCm: measures.waistCm ?? 0,
+      hipsCm: measures.hipsCm ?? 0,
+      footCm: measures.footCm
+    };
     let migliore = null;
     for (const table of candidate) {
-      const recommendation = consiglioBase(measures, table.data, options);
+      const data = soloMisureDate(table.data, measures, chiave);
+      if (!data) continue;
+      const recommendation = consiglioBase(piene, data, options);
       if (!recommendation) continue;
       const vince = !migliore || recommendation.confidence === "exact" && migliore.recommendation.confidence !== "exact" || recommendation.confidence === migliore.recommendation.confidence && recommendation.score > migliore.recommendation.score;
-      if (vince) migliore = { recommendation, table };
+      if (vince) migliore = { recommendation, table, data };
     }
     if (!migliore) return null;
     return {
       recommendation: conOrdine(
-        applicaVestibilita(migliore.recommendation, measures, migliore.table.data, options),
-        migliore.table.data
+        applicaVestibilita(migliore.recommendation, piene, migliore.data, options),
+        migliore.data
       ),
       table: migliore.table,
       candidates: candidate.length
     };
+  }
+  function soloMisureDate(rows, measures, chiave) {
+    const dichiarata = (d) => rows.some((r) => !isRangeUnspecified(r[COLONNE[d][0]] ?? 0, r[COLONNE[d][1]] ?? 0));
+    const dichiarate = ["height", "bust", "waist", "hips", "foot"].filter(dichiarata);
+    const assenti = dichiarate.filter((d) => measures[MISURA[d]] == null);
+    if (assenti.length === dichiarate.length || assenti.some((d) => chiave.includes(d))) return null;
+    if (assenti.length === 0) return rows;
+    return rows.map((r) => {
+      const ridotta = { ...r };
+      for (const d of assenti) {
+        ridotta[COLONNE[d][0]] = 0;
+        ridotta[COLONNE[d][1]] = 0;
+      }
+      return ridotta;
+    });
   }
   const CAMPO_ATTRIBUZIONE = "properties[_cabina]";
   let ultimaSessione = null;
@@ -7885,17 +7939,9 @@
   function senzaChiave(valore) {
     return valore.startsWith("form.") ? void 0 : valore;
   }
-  const DEFAULT_MEASURES = {
-    heightCm: 168,
-    bustCm: 90,
-    waistCm: 75,
-    hipsCm: 96,
-    weightKg: 65
-  };
   let initStarted = false;
   let modelSelectionInFlight = false;
   const CATEGORIE_CON_AVVISO = ["accessory"];
-  let currentLang = null;
   let currentApiKey = null;
   let currentSessionId = null;
   let sessionCompleteSent = false;
@@ -8609,8 +8655,8 @@
             widgetContext = { ...widgetContext, recommendedSize: null };
             updateSizeBadge(null);
           } else {
-            const measuresForCalc = { ...DEFAULT_MEASURES, ...widgetContext.measures ?? {} };
-            const footEstimated = measuresForCalc.footCm == null;
+            const measuresForCalc = { ...widgetContext.measures };
+            const footEstimated = measuresForCalc.footCm == null && measuresForCalc.heightCm != null;
             if (footEstimated) measuresForCalc.footCm = stimaPiedeDaAltezza(measuresForCalc.heightCm);
             (sizeTables ? Promise.resolve(sizeTables) : fetchSizeTables(apiKeyForCalc, baseUrlForCalc)).then((tables) => {
               if (tables && tables.length > 0) {
@@ -8618,7 +8664,8 @@
                   measureSource: widgetContext.measureSource ?? void 0,
                   garment: garmentAnalysis,
                   footEstimated,
-                  fit: widgetContext.fit ?? void 0
+                  fit: widgetContext.fit ?? void 0,
+                  perChi: rispostaPerChi
                 });
                 console.log(
                   `[widget] size-table=${scelta?.table.name ?? "-"} category=${garmentAnalysis?.category ?? "unknown"} candidate=${scelta?.candidates ?? 0}`
@@ -8749,7 +8796,6 @@
     const lang = resolveLanguage(config.defaultLanguage);
     try {
       await loadLocale(lang, baseUrl);
-      currentLang = getCurrentLanguage();
     } catch {
     }
     if (document.readyState === "loading") {

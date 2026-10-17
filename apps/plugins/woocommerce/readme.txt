@@ -5,7 +5,7 @@ Requires at least: 6.5
 Requires Plugins: woocommerce
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 1.2.4
+Stable tag: 1.2.5
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -117,6 +117,10 @@ Yes. The plugin uses standard WooCommerce hooks. If your theme does not support 
 4. The Cabina Dashboard, where you customize the widget
 
 == Changelog ==
+
+= 1.2.5 =
+
+* Widget updated to the current release: dragging the before/after slider no longer pans the zoomed result; the mouse wheel scrolls the page and zooms only with Ctrl (or a trackpad pinch); on phones a finger on the result scrolls the page until the photo is zoomed; the "Drag to compare" hint moved to the bottom left so it no longer covers the face; the size recommendation uses only the measurements the shopper gave, respects the adult/child answer and ignores out-of-range values
 
 = 1.2.4 =
 

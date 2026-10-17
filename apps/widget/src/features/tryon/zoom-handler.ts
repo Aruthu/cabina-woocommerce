@@ -1,7 +1,7 @@
 /**
  * Zoom Handler — gestisce zoom e pan dell'immagine try-on.
  *
- * Desktop: wheel → zoom (1×–3×) **verso il puntatore**, drag col tasto sinistro → pan
+ * Desktop: Ctrl + wheel (o pinch del trackpad) → zoom (1×–3×) **verso il puntatore**, drag col tasto sinistro → pan
  * Mobile: pinch (2 dita) → zoom verso il centro delle dita, 1 dito drag → pan
  * Doppio tap/click → a 1× ingrandisce sul punto toccato, altrimenti torna a 1×.
  * Pan abilitato solo quando scale > 1.01.
@@ -80,6 +80,17 @@ export const DOUBLE_TAP_DELAY = 300; // ms per riconoscere doppio tap
  *  confronto si sposta mentre lo zoom scatta. */
 export const DOUBLE_TAP_SLOP = 40; // px
 
+/**
+ * Quali gesti del dito restano al browser sopra la prova. 17/10/2026 (Arou): con
+ * `none` fisso, sul telefono un dito che scorreva sopra la foto non muoveva la
+ * pagina. A 1× il verticale scorre la pagina (`pan-y`: niente zoom della pagina
+ * né doppio tocco del browser, quelli restano nostri); da ingrandita ogni
+ * direzione serve a spostare la foto.
+ */
+function gestiDelBrowser(scale: number): 'pan-y' | 'none' {
+  return scale > 1.01 ? 'none' : 'pan-y';
+}
+
 /** Il secondo di due tocchi vicini nel tempo e nello spazio. */
 export function eDoppioTocco(
   prima: { t: number; x: number; y: number },
@@ -112,6 +123,13 @@ export function createZoomHandler(callbacks: ZoomCallbacks): ZoomHandler {
   // la prova spariva dietro la foto originale (visto il 27/09 sulle scarpe).
   let trascinato = false;
 
+  // 17/10/2026 (Arou, sulla demo): da ingrandita, trascinare la barra del
+  // confronto spostava anche la foto — il pointerdown della maniglia risale
+  // fin qui e faceva partire il pan. Il gesto sulla maniglia è suo.
+  function dallaManiglia(e: Event): boolean {
+    return !!(e.target as Element | null)?.closest?.('[data-cabina-reveal-handle]');
+  }
+
   function clampScale(scale: number): number {
     return Math.max(MIN_SCALE, Math.min(MAX_SCALE, scale));
   }
@@ -139,6 +157,7 @@ export function createZoomHandler(callbacks: ZoomCallbacks): ZoomHandler {
       currentTransform.translateX = Math.max(x0, Math.min(x1, currentTransform.translateX));
       currentTransform.translateY = Math.max(y0, Math.min(y1, currentTransform.translateY));
     }
+    if (container) container.style.touchAction = gestiDelBrowser(currentTransform.scale);
     callbacks.onTransformChange({ ...currentTransform });
   }
 
@@ -174,6 +193,10 @@ export function createZoomHandler(callbacks: ZoomCallbacks): ZoomHandler {
   // ── Wheel (desktop zoom) ──────────────────────────────────────────────
 
   function handleWheel(e: WheelEvent): void {
+    // 17/10/2026 (Arou): la rotella da sola scorre la pagina. Prima chi scorreva
+    // col puntatore sopra la foto la ingrandiva senza volerlo. Il pinch del
+    // trackpad arriva come wheel con `ctrlKey`, quindi funziona ancora.
+    if (!e.ctrlKey) return;
     e.preventDefault();
     const delta = -e.deltaY * ZOOM_SENSITIVITY;
     const { x, y } = puntoNelContenitore(e.clientX, e.clientY);
@@ -197,6 +220,8 @@ export function createZoomHandler(callbacks: ZoomCallbacks): ZoomHandler {
   }
 
   function handleTouchStart(e: TouchEvent): void {
+    // Due dita sono sempre un pinch, anche se una cade sulla maniglia (rilievo Kilo, #335).
+    if (e.touches.length === 1 && dallaManiglia(e)) return;
     if (e.touches.length === 2) {
       // Pinch start
       isPinching = true;
@@ -251,6 +276,7 @@ export function createZoomHandler(callbacks: ZoomCallbacks): ZoomHandler {
   function handlePointerDown(e: PointerEvent): void {
     // Solo left button, e solo se già zoommato (pan abilitato)
     if (e.button !== 0) return;
+    if (dallaManiglia(e)) return;
     if (currentTransform.scale <= 1.01) return;
 
     pointerPanning = true;
@@ -337,10 +363,10 @@ export function createZoomHandler(callbacks: ZoomCallbacks): ZoomHandler {
     el.addEventListener('pointerup', handlePointerUp);
     el.addEventListener('pointercancel', handlePointerUp);
     el.addEventListener('dragstart', handleDragStart);
-    // Niente selezione di testo né gesti del browser (scroll, zoom della
-    // pagina) sopra la prova: qui i gesti sono nostri.
+    // Niente selezione di testo né zoom della pagina sopra la prova; lo
+    // scorrimento verticale resta al browser finché la foto non è ingrandita.
     el.style.userSelect = 'none';
-    el.style.touchAction = 'none';
+    el.style.touchAction = gestiDelBrowser(currentTransform.scale);
 
     // Doppio tap
     el.addEventListener('click', handleClick);

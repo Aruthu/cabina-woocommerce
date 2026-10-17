@@ -128,7 +128,7 @@ export async function estimateMeasuresFromPhoto(
     const mimeType = mimeMatch?.[1] ?? 'image/jpeg';
 
     // POST con Content-Type text/plain (CORS-safelisted) → nessun preflight
-    // cross-origin; api_key nel body (pattern garment-views). Con
+    // cross-origin; api_key nel body (pattern consent-event). Con
     // application/json + X-Api-Key il browser faceva un preflight che nessuna
     // route del widget sa gestire, e la chiamata moriva prima di partire.
     const res = await fetchWithTimeout(
@@ -222,7 +222,7 @@ export async function analyzeGarmentFromUrl(
 
 /**
  * Recupera il catalogo mix&match del merchant (Story 12.3).
- * POST /api/widget/catalog con api_key (pattern garment-views, text/plain).
+ * POST /api/widget/catalog con api_key (pattern consent-event, text/plain).
  * Silent failure → `null` (mai rompere il flusso try-on): se il catalogo non
  * è disponibile, il widget mostra solo l'azione default "Prova in Cabina".
  */
@@ -344,7 +344,7 @@ export async function tryonGenerative(
     const timeoutMs = 100_000 + 25_000 * Math.max(0, garments.length - 1);
 
     // POST con Content-Type text/plain (CORS-safelisted) → nessun preflight
-    // cross-origin; api_key nel body, mai in query (pattern garment-views).
+    // cross-origin; api_key nel body, mai in query (pattern consent-event).
     const res = await fetchWithTimeout(
       url,
       {
@@ -428,7 +428,7 @@ export function sendTryonReport(
 /**
  * Segna la sessione widget come completata (Story 7.4 / AC2, ri-cablata
  * 2026-07-15): l'acquirente ha raggiunto il risultato del try-on. Alimenta la
- * metrica di conversione (dashboard/API v1/MCP) e il webhook `session.completed`.
+ * metrica di conversione (dashboard/API v1/MCP).
  *
  * POST /api/widget/session/complete, FIRE-AND-FORGET: `keepalive: true` +
  * `.catch(() => {})`, MAI `await`-ata sul percorso UI (pattern sendTryonReport).
@@ -523,7 +523,7 @@ export async function notifySessionStart(
     const url = `${sanitizedBase}/api/widget/session`;
 
     // POST con Content-Type text/plain (CORS-safelisted) → nessun preflight
-    // cross-origin; api_key nel body, mai in query (pattern garment-views).
+    // cross-origin; api_key nel body, mai in query (pattern consent-event).
     const res = await fetchWithTimeout(
       url,
       {

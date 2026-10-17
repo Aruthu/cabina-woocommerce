@@ -1,7 +1,7 @@
 import { fetchWidgetConfig, notifySessionStart, notifySessionComplete, estimateMeasuresFromPhoto, analyzeGarmentFromUrl, fetchCatalog, tryonGenerative, sendConsentEvent, type CatalogData, type TryonIdentity } from './api/widget-api';
 import type { SelectedGarment } from './state/types';
 import type { FashnGarmentCategory } from '@cabina/shared';
-import { resolveLanguage, loadLocale, getLocaleString, getLocaleStringOr, getLocaleStringDefault, getCurrentLanguage } from './i18n/i18n';
+import { resolveLanguage, loadLocale, getLocaleString, getLocaleStringOr, getLocaleStringDefault } from './i18n/i18n';
 import { widgetReducer, createInitialContext, resetSessionContext } from './state/machine';
 import { isBrowserSupported, getBrowserUpdateLink } from './utils/browser';
 import { caricaImmaginiVarianti, extractProductImageUrl } from './utils/product-image';
@@ -28,7 +28,7 @@ import {
   attribuzioneDaRimettere,
   __resetAttribuzioneForTesting,
 } from './features/reveal-result/attribuzione-ordine';
-import type { WidgetLanguage, WidgetPublicConfig, Measures } from '@cabina/shared';
+import type { WidgetPublicConfig, Measures } from '@cabina/shared';
 import { BUTTON_ANCHORS, BUTTON_TARGET_ATTR, AUTO_OPEN_PARAM, AUTO_OPEN_VALUE } from '@cabina/shared';
 import type { GarmentAnalysis, GarmentCategory } from './state/types';
 
@@ -111,7 +111,6 @@ export function __resetWidgetForTesting(): void {
   rispostaPerChi = undefined;
   __resetAttribuzioneForTesting();
 }
-let currentLang: WidgetLanguage | null = null;
 let currentApiKey: string | null = null;
 // Story 7.4 (ri-cablata 2026-07-15): id della widget_session creata da
 // notifySessionStart. Serve al completamento fire-and-forget quando
@@ -1144,11 +1143,16 @@ function renderState(button: HTMLElement): void {
           widgetContext = { ...widgetContext, recommendedSize: null };
           updateSizeBadge(null);
         } else {
-          const measuresForCalc: Measures = { ...DEFAULT_MEASURES, ...(widgetContext.measures ?? {}) };
+          // ⚠️ 16/10/2026 — SOLO le misure date (a mano, dalla foto, da altezza e
+          // peso): prima le mancanti si completavano con DEFAULT_MEASURES, e chi
+          // scriveva solo l'altezza riceveva la taglia di un corpo inventato. Le
+          // misure chiave del capo le pretende `recommendFromTables`.
+          const measuresForCalc: Partial<Measures> = { ...widgetContext.measures };
           // Il piede (scarpe, 05/09/2026): se l'acquirente non l'ha scritto, si
-          // stima dall'altezza — e il consiglio lo sa, così pesa come una stima.
-          const footEstimated = measuresForCalc.footCm == null;
-          if (footEstimated) measuresForCalc.footCm = stimaPiedeDaAltezza(measuresForCalc.heightCm);
+          // stima dall'altezza — solo da un'altezza data — e il consiglio lo sa,
+          // così pesa come una stima.
+          const footEstimated = measuresForCalc.footCm == null && measuresForCalc.heightCm != null;
+          if (footEstimated) measuresForCalc.footCm = stimaPiedeDaAltezza(measuresForCalc.heightCm!);
           // Le tabelle sono già arrivate all'avvio (12/10/2026): si richiedono
           // solo se quella chiamata era fallita (rilievo di Kilo sulla #317).
           (sizeTables ? Promise.resolve(sizeTables) : fetchSizeTables(apiKeyForCalc, baseUrlForCalc)).then((tables) => {
@@ -1159,6 +1163,7 @@ function renderState(button: HTMLElement): void {
                 garment: garmentAnalysis,
                 footEstimated,
                 fit: widgetContext.fit ?? undefined,
+                perChi: rispostaPerChi,
               });
               console.log(
                 `[widget] size-table=${scelta?.table.name ?? '-'} category=${garmentAnalysis?.category ?? 'unknown'} candidate=${scelta?.candidates ?? 0}`,
@@ -1402,7 +1407,6 @@ export async function initWidget(apiKey: string, baseUrl = ''): Promise<void> {
   const lang = resolveLanguage(config.defaultLanguage);
   try {
     await loadLocale(lang, baseUrl);
-    currentLang = getCurrentLanguage();
   } catch {
     // Fallback silenzioso: loadLocale ha già tentato 'en' internamente
     // Se anche 'en' fallisce, il widget continua senza traduzioni (usa chiavi raw)
@@ -1591,12 +1595,4 @@ function startGarmentAnalysis(apiKey: string, baseUrl: string): void {
     .then((result) => { garmentAnalysis = result; })
     .catch(() => { garmentAnalysis = null; })
     .finally(() => { garmentAnalysisPending = false; });
-}
-
-/**
- * Restituisce la lingua corrente del widget dopo l'inizializzazione.
- * Null se initWidget non è ancora stato chiamato o è fallito.
- */
-export function getWidgetLanguage(): WidgetLanguage | null {
-  return currentLang;
 }

@@ -230,15 +230,22 @@ export const PERIOD_FALLBACK_DAYS = 35;
  * una migration per nulla: è **l'inizio del periodo corrente**, e vale per le
  * prove. Chi paga lo fa avanzare col rinnovo; il freemium, che fattura non ha,
  * coi 30 giorni — ed è l'unico motivo per cui questa funzione esiste ancora.
+ *
+ * ⚠️ 16/10/2026 — **Shopify e Wix non hanno un rinnovo che sposti il periodo**
+ * (`invoice.paid` è solo di Stripe): per chi paga lì la rete dei 35 giorni era
+ * l'orologio vero, e ogni mese durava 35 giorni. Con `billingChannel` shopify
+ * o wix il periodo è di 30 giorni, come il ciclo di Managed Pricing.
  */
 export function isPeriodExpired(
   periodStart: string | null | undefined,
   plan: MerchantPlan | string | null | undefined = null,
+  billingChannel: string | null | undefined = null,
 ): boolean {
   if (!periodStart) return false;
   const start = new Date(periodStart).getTime();
   if (!Number.isFinite(start)) return false;
-  const soglia = plan && plan !== 'freemium' ? PERIOD_FALLBACK_DAYS : PERIOD_DAYS;
+  const rinnovoStripe = billingChannel !== 'shopify' && billingChannel !== 'wix';
+  const soglia = plan && plan !== 'freemium' && rinnovoStripe ? PERIOD_FALLBACK_DAYS : PERIOD_DAYS;
   return (Date.now() - start) / (1000 * 60 * 60 * 24) >= soglia;
 }
 

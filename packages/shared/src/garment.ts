@@ -1,5 +1,6 @@
 /**
- * Catalogo viste multiple del capo (Story 10.3 / AD-D4).
+ * Chiave del capo (nata con la Story 10.3 / AD-D4; le viste multiple e il 360°
+ * sono usciti dal prodotto, la chiave è rimasta).
  *
  * La **chiave** di un capo è l'URL della pagina prodotto normalizzato — non
  * l'og:image, che è un file su CDN e cambia con ri-upload/cache-busting. La
@@ -7,40 +8,6 @@
  * (dashboard) sia la lettura (endpoint widget + helper widget). Se le due parti
  * divergessero, il lookup fallirebbe in silenzio.
  */
-
-/** Angolazioni delle viste del capo. */
-export type GarmentViewAngle = 'front' | 'right' | 'back' | 'left';
-
-/** URL pubblici delle viste caricate (assente = vista non disponibile). */
-export interface GarmentViews {
-  front?: string | null;
-  right?: string | null;
-  back?: string | null;
-  left?: string | null;
-}
-
-/** Gradi di rotazione per ciascuna angolazione (0/90/180/270). */
-export const GARMENT_ANGLE_DEGREES: Record<GarmentViewAngle, number> = {
-  front: 0,
-  right: 90,
-  back: 180,
-  left: 270,
-};
-
-/** Ordine canonico delle angolazioni. */
-export const GARMENT_ANGLE_ORDER: readonly GarmentViewAngle[] = ['front', 'right', 'back', 'left'];
-
-/**
- * Angoli (in gradi) per cui esiste una vista esplicitamente caricata.
- * Nota: il fronte (0°) è comunque coperto a runtime dall'og:image anche se
- * `front` è assente qui — questo helper riflette solo le viste memorizzate.
- */
-export function availableAngles(views: GarmentViews): number[] {
-  return GARMENT_ANGLE_ORDER.filter((a) => {
-    const url = views[a];
-    return typeof url === 'string' && url.length > 0;
-  }).map((a) => GARMENT_ANGLE_DEGREES[a]);
-}
 
 /** Parametri query considerati tracking (rimossi dalla chiave). `?variant=` è preservato. */
 const TRACKING_PARAM = /^(utm_|fbclid$|gclid$|yclid$|msclkid$|mc_eid$|mc_cid$|_ga$)/i;

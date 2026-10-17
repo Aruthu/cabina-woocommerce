@@ -111,12 +111,6 @@ export function assessPhotoQuality(dataUrl: string): Promise<PhotoQualityResult>
   });
 }
 
-/** Etichette localizzate per i livelli di qualità */
-export function getQualityLabel(quality: PhotoQuality, locale: Record<string, string>): string {
-  const key = `photo.quality_${quality}`;
-  return locale[key] ?? quality;
-}
-
 // ── Resize client-side (2026-07-31, bug PHOTO_TOO_LARGE) ────────────────────
 // Le foto da telefono (2-8MB) diventano 3-11M caratteri base64: la route
 // estimate-measures rifiuta oltre 1,5M char (400 PHOTO_TOO_LARGE) e oltre ~4,5MB

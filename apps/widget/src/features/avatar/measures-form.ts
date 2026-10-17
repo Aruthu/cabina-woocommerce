@@ -559,8 +559,11 @@ export function createMeasuresForm(
     // sovrascriverebbero i DEFAULT_MEASURES nello spread a valle (widget.ts),
     // inviando misure incomplete al rendering e al calcolo taglia.
     const out: Partial<Measures> = {};
+    // ⚠️ 16/10/2026 — un valore fuori range (il campo rosso: pollici, «36» di
+    // busto) vale come non dato. Prima passava, e il consiglio taglia lo
+    // prendeva per centimetri: la taglia più piccola della tabella.
     const setIf = (name: MeasureField, value: number | undefined): void => {
-      if (value != null) out[name] = value;
+      if (value != null && value >= FIELD_CONFIG[name].min && value <= FIELD_CONFIG[name].max) out[name] = value;
     };
     setIf('heightCm', getVal(fields.heightCm));
     setIf('weightKg', getVal(fields.weightKg));
@@ -634,7 +637,7 @@ export function createMeasuresForm(
   async function handleConfirm(): Promise<void> {
     // Raccoglie i valori presenti — le misure sono opzionali (AC1).
     // La validazione inline dei singoli campi rimane per feedback visivo,
-    // ma non blocca più il submit. Il widget.ts completa con DEFAULT_MEASURES.
+    // ma non blocca più il submit: un campo fuori range si scarta (getCurrentValues).
     const values = getCurrentValues();
     submitting = true;
     updateConfirmButton();

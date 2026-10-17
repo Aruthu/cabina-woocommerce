@@ -60,6 +60,9 @@ export interface RecommendationOptions {
   footEstimated?: boolean;
   /** Vestibilità scelta dall'acquirente; assente = `regular`. */
   fit?: FitPreference;
+  /** La risposta a «chi lo indosserà?» (16/10/2026): fra le candidate valgono
+   *  solo le tabelle di quel pubblico; se non ne resta nessuna, tutte. */
+  perChi?: 'adult' | 'kids';
 }
 
 /**
@@ -165,6 +168,15 @@ const LOOSE_WEIGHT = 0.5;
 export const FIT_MARGIN_CM = 2;
 
 type Dimensione = 'height' | 'bust' | 'waist' | 'hips' | 'foot';
+
+const MISURA = { height: 'heightCm', bust: 'bustCm', waist: 'waistCm', hips: 'hipsCm', foot: 'footCm' } as const;
+const COLONNE = {
+  height: ['heightMin', 'heightMax'],
+  bust: ['bustMin', 'bustMax'],
+  waist: ['waistMin', 'waistMax'],
+  hips: ['hipsMin', 'hipsMax'],
+  foot: ['footMin', 'footMax'],
+} as const;
 
 /** Le misure che decidono la vestibilità di un capo. */
 function dimensioniChiave(category: GarmentCategory | null | undefined): Dimensione[] {
@@ -549,12 +561,13 @@ function consiglioBase(
     options = { ...options, footEstimated: false };
   }
 
-  // Verifica che le misure essenziali siano presenti e plausibili
+  // Verifica che le misure essenziali siano presenti e plausibili — solo quelle
+  // che la tabella dichiara (16/10/2026): le altre `recommendFromTables` le ha
+  // tolte perché l'acquirente non le ha date, e valgono 0.
   if (
-    measures.heightCm <= 0 ||
-    measures.bustCm <= 0 ||
-    measures.waistCm <= 0 ||
-    measures.hipsCm <= 0
+    (['height', 'bust', 'waist', 'hips'] as const).some(
+      (d) => sizeTable.some((r) => rangeDi(measures, r, d)) && measures[MISURA[d]]! <= 0,
+    )
   ) {
     return null;
   }
@@ -740,33 +753,88 @@ export function perChiIlCapo(
  * confrontabile sono i range in centimetri.
  */
 export function recommendFromTables(
-  measures: Measures,
-  tables: readonly SizeTableCandidate[],
+  measures: Partial<Measures>,
+  tables: ReadonlyArray<SizeTableCandidate & { audience?: SizeTableAudience | null }>,
   options?: RecommendationOptions,
 ): { recommendation: SizeRecommendation; table: SizeTableCandidate; candidates: number } | null {
-  const candidate = pickSizeTables(tables, options?.garment?.category ?? null);
-  let migliore: { recommendation: SizeRecommendation; table: SizeTableCandidate } | null = null;
+  const tutte = pickSizeTables(tables, options?.garment?.category ?? null);
+  // ⚠️ 16/10/2026 — la risposta «adulto / bambino» non filtrava le tabelle: un
+  // adulto 158/80/64/86 poteva ricevere «14 anni» dalla tabella bambini.
+  const delPubblico = options?.perChi
+    ? tutte.filter((t) => (t.audience === 'kids') === (options.perChi === 'kids'))
+    : tutte;
+  const candidate = delPubblico.length > 0 ? delPubblico : tutte;
+  const chiave = dimensioniChiave(options?.garment?.category);
+  // Le misure non date valgono 0, ma `soloMisureDate` toglie dalle righe le
+  // dimensioni che le userebbero: nessun confronto le tocca.
+  const piene: Measures = {
+    heightCm: measures.heightCm ?? 0,
+    bustCm: measures.bustCm ?? 0,
+    waistCm: measures.waistCm ?? 0,
+    hipsCm: measures.hipsCm ?? 0,
+    footCm: measures.footCm,
+  };
+  let migliore: { recommendation: SizeRecommendation; table: SizeTableCandidate; data: SizeTableRow[] } | null = null;
   for (const table of candidate) {
+    const data = soloMisureDate(table.data, measures, chiave);
+    if (!data) continue;
     // Il confronto fra tabelle si fa sul consiglio di BASE: la vestibilità
     // trasforma un match esatto in «tra due taglie», e applicata qui farebbe
     // vincere la tabella sbagliata (un bambino nella tabella adulti). Si
     // applica dopo, sulla tabella scelta.
-    const recommendation = consiglioBase(measures, table.data, options);
+    const recommendation = consiglioBase(piene, data, options);
     if (!recommendation) continue;
     const vince =
       !migliore ||
       (recommendation.confidence === 'exact' && migliore.recommendation.confidence !== 'exact') ||
       (recommendation.confidence === migliore.recommendation.confidence &&
         recommendation.score > migliore.recommendation.score);
-    if (vince) migliore = { recommendation, table };
+    if (vince) migliore = { recommendation, table, data };
   }
   if (!migliore) return null;
   return {
     recommendation: conOrdine(
-      applicaVestibilita(migliore.recommendation, measures, migliore.table.data, options),
-      migliore.table.data,
+      applicaVestibilita(migliore.recommendation, piene, migliore.data, options),
+      migliore.data,
     ),
     table: migliore.table,
     candidates: candidate.length,
   };
+}
+
+/**
+ * Le righe della tabella ridotte alle misure che l'acquirente ha dato davvero
+ * (a mano, dalla foto o da altezza e peso), o `null` se così non si può
+ * consigliare. (16/10/2026)
+ *
+ * ⚠️ Prima il widget completava le misure mancanti con le medie del rendering
+ * (busto 90, vita 75, fianchi 96): chi scriveva solo l'altezza riceveva una
+ * taglia calcolata su un corpo inventato, anche «esatta» col badge verde. 🔑
+ * Nessuna misura batte una misura sbagliata, quindi:
+ *  - una misura chiave del capo (`dimensioniChiave`) che la tabella dichiara
+ *    e l'acquirente non ha dato → nessun consiglio;
+ *  - le altre dimensioni non date si tolgono dalle righe (diventano [0,0], non
+ *    dichiarate), così non pesano né in un senso né nell'altro;
+ *  - se non resta nessuna dimensione da confrontare → nessun consiglio (ogni
+ *    riga «combacerebbe»).
+ */
+function soloMisureDate(
+  rows: SizeTableRow[],
+  measures: Partial<Measures>,
+  chiave: Dimensione[],
+): SizeTableRow[] | null {
+  const dichiarata = (d: Dimensione) =>
+    rows.some((r) => !isRangeUnspecified(r[COLONNE[d][0]] ?? 0, r[COLONNE[d][1]] ?? 0));
+  const dichiarate = (['height', 'bust', 'waist', 'hips', 'foot'] as const).filter(dichiarata);
+  const assenti = dichiarate.filter((d) => measures[MISURA[d]] == null);
+  if (assenti.length === dichiarate.length || assenti.some((d) => chiave.includes(d))) return null;
+  if (assenti.length === 0) return rows;
+  return rows.map((r) => {
+    const ridotta = { ...r };
+    for (const d of assenti) {
+      ridotta[COLONNE[d][0]] = 0;
+      ridotta[COLONNE[d][1]] = 0;
+    }
+    return ridotta;
+  });
 }

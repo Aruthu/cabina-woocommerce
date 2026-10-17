@@ -91,6 +91,26 @@ export const SizeTableRowSchema = z
   .refine((r) => r.hipsMin <= r.hipsMax, {
     message: 'hipsMin deve essere <= hipsMax',
     path: ['hipsMin'],
+  })
+  // ⚠️ 16/10/2026 — una tabella in pollici passava (è tutto fra 0 e 300) e il
+  // widget la leggeva in centimetri: a ogni acquirente la taglia più grande.
+  // Un busto o dei fianchi sotto i 45 cm non esistono nemmeno nelle tabelle
+  // bambini (le modelle minorenni partono dai 7 anni, ~60 cm), mentre in
+  // pollici ogni tabella adulta ha righe fra 30 e 45. Anche la vita (rilievo
+  // Kilo, #332): i pantaloni misurati solo in vita (W30, W32) passavano; a 7
+  // anni la vita è già sopra i 50 cm. Il piede resta fuori: 25 cm è una misura
+  // vera. 0 = non dichiarato.
+  .refine((r) => r.bustMax === 0 || r.bustMax >= 45, {
+    message: 'Sembrano pollici: inserisci i centimetri',
+    path: ['bustMax'],
+  })
+  .refine((r) => r.waistMax === 0 || r.waistMax >= 45, {
+    message: 'Sembrano pollici: inserisci i centimetri',
+    path: ['waistMax'],
+  })
+  .refine((r) => r.hipsMax === 0 || r.hipsMax >= 45, {
+    message: 'Sembrano pollici: inserisci i centimetri',
+    path: ['hipsMax'],
   });
 
 export type SizeTableRow = z.infer<typeof SizeTableRowSchema>;
@@ -109,25 +129,10 @@ export const SizeTableCreateSchema = z.object({
   audience: SizeTableAudienceSchema.default('adult'),
 });
 
-// ─── Garment Views Schemas (Story 10.3) ─────────────────────────────────
-
-/** Angolazione di una vista del capo. */
-export const GarmentViewAngleSchema = z.enum(['front', 'right', 'back', 'left']);
+// ─── URL pagina prodotto (chiave capo) ───────────────────────────────────
 
 /** Cap di lunghezza condiviso per gli URL di pagina prodotto (widget + Studio). */
 export const PRODUCT_URL_MAX_LENGTH = 2048;
-
-/** URL della pagina prodotto fornita dal client (chiave capo, prima della normalizzazione). */
-export const ProductPageUrlSchema = z
-  .string({ required_error: 'productPageUrl mancante' })
-  .trim()
-  .min(1, 'productPageUrl mancante')
-  .max(PRODUCT_URL_MAX_LENGTH, 'productPageUrl troppo lungo');
-
-/** Input dell'endpoint widget `garment-views`. */
-export const GarmentViewsQuerySchema = z.object({
-  productPageUrl: ProductPageUrlSchema,
-});
 
 // Nota Studio (11.2): l'allowlist mime e il limite dimensione sono un'unica sorgente
 // in types.ts (STUDIO_IMAGE_MIME / STUDIO_IMAGE_MAX_BYTES), usati sia client sia server.
