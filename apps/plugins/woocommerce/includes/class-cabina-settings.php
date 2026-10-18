@@ -62,6 +62,191 @@ class Cabina_Settings {
 			'cabina-settings',
 			'cabina_main_section'
 		);
+
+		// Statistiche ordini: la Admin API key PRIMA della casella, perché
+		// WordPress salva le opzioni nell'ordine di registrazione e la casella,
+		// accendendosi, usa la chiave appena salvata.
+		register_setting(
+			CABINA_SETTINGS_OPTION_GROUP,
+			CABINA_ADMIN_KEY_OPTION,
+			[
+				'type'              => 'string',
+				'sanitize_callback' => [self::class, 'sanitize_admin_key'],
+				'default'           => '',
+			]
+		);
+		register_setting(
+			CABINA_SETTINGS_OPTION_GROUP,
+			CABINA_ORDER_STATS_OPTION,
+			[
+				'type'              => 'boolean',
+				'sanitize_callback' => [self::class, 'sanitize_order_stats'],
+				'default'           => false,
+			]
+		);
+
+		add_settings_section(
+			'cabina_orders_section',
+			__('Order statistics', 'cabina'),
+			[self::class, 'render_orders_section_description'],
+			'cabina-settings'
+		);
+
+		add_settings_field(
+			'cabina_admin_key',
+			__('Admin API key', 'cabina'),
+			[self::class, 'render_admin_key_field'],
+			'cabina-settings',
+			'cabina_orders_section'
+		);
+
+		add_settings_field(
+			'cabina_order_stats',
+			__('Order statistics', 'cabina'),
+			[self::class, 'render_order_stats_field'],
+			'cabina-settings',
+			'cabina_orders_section'
+		);
+	}
+
+	/**
+	 * Valida la Admin API key (`cab_admin_`): una chiave sbagliata lascia la
+	 * precedente, come per la API key del widget. Il campo arriva vuoto
+	 * quando non la si cambia (la pagina non la ristampa): vuoto = resta la
+	 * chiave salvata.
+	 *
+	 * @param mixed $value Valore inviato dal form.
+	 */
+	public static function sanitize_admin_key($value): string {
+		$key = sanitize_text_field((string) $value);
+		if ('' === $key) {
+			return Cabina_Orders::admin_key();
+		}
+
+		if (1 !== preg_match('/^cab_admin_[0-9a-f]{32}$/', $key)) {
+			add_settings_error(
+				CABINA_ADMIN_KEY_OPTION,
+				'cabina_admin_key_invalid',
+				esc_html__('The Cabina Admin API key must start with "cab_admin_" followed by 32 characters. The key was not saved.', 'cabina')
+			);
+			return Cabina_Orders::admin_key();
+		}
+
+		return $key;
+	}
+
+	/**
+	 * La casella «Order statistics». Accenderla chiede a Cabina di aprire la
+	 * raccolta (`enable`); se Cabina dice di no (chiave, piano) resta spenta e
+	 * la pagina dice perché. Spegnerla lo dice a Cabina (`disable`).
+	 *
+	 * @param mixed $value Valore inviato dal form (assente = casella tolta).
+	 */
+	public static function sanitize_order_stats($value): bool {
+		$accesa = !empty($value);
+		if (Cabina_Orders::$dal_server) {
+			return $accesa;
+		}
+		$prima = (bool) get_option(CABINA_ORDER_STATS_OPTION, false);
+		if ($accesa === $prima) {
+			return $accesa;
+		}
+
+		if (!$accesa) {
+			Cabina_Orders::queue_disable();
+			return false;
+		}
+
+		if ('' === Cabina_Orders::admin_key()) {
+			add_settings_error(
+				CABINA_ORDER_STATS_OPTION,
+				'cabina_order_stats_no_key',
+				esc_html__('Order statistics need the Admin API key: generate it in the Cabina Dashboard → API REST and paste it above.', 'cabina')
+			);
+			return false;
+		}
+
+		list($codice, $json, $errore) = Cabina_Orders::call(['event' => 'enable']);
+		if (200 === $codice && is_array($json) && !empty($json['data']['enabled'])) {
+			$dal = isset($json['data']['enabled_at']) ? strtotime((string) $json['data']['enabled_at']) : false;
+			update_option(CABINA_ORDER_STATS_SINCE_OPTION, $dal ? $dal : time(), false);
+			delete_option(CABINA_ORDER_STATS_ERROR_OPTION);
+			return true;
+		}
+
+		if (200 === $codice && is_array($json) && isset($json['data']['reason']) && 'plan' === $json['data']['reason']) {
+			$messaggio = __('Order statistics are available from the Starter plan. Upgrade in the Cabina Dashboard → Billing, then turn them on again.', 'cabina');
+		} else {
+			/* translators: %s: error message returned by Cabina */
+			$messaggio = sprintf(__('Cabina did not turn on order statistics: %s', 'cabina'), $errore);
+		}
+		add_settings_error(CABINA_ORDER_STATS_OPTION, 'cabina_order_stats_failed', esc_html($messaggio));
+		return false;
+	}
+
+	/**
+	 * Cosa fanno le statistiche e cosa esce dal negozio.
+	 */
+	public static function render_orders_section_description(): void {
+		printf(
+			'<p>%s</p>',
+			esc_html__(
+				'Optional, off until you turn it on (Starter plan or higher). Cabina\'s dashboard then shows how many orders come from a try-on, what they are worth and how many are refunded, with and without a try-on. For each paid order the plugin sends to Cabina only the order and line IDs, quantity, line total, currency, date and the try-on ID: no customer data (no names, emails, addresses, phone numbers or IP addresses).',
+				'cabina'
+			)
+		);
+	}
+
+	/**
+	 * Il campo della Admin API key. È una chiave segreta: la pagina non la
+	 * ristampa (rilievo Kilo sulla #341), mostra solo le ultime 4 cifre nel
+	 * segnaposto. Lasciato vuoto, al salvataggio resta quella salvata.
+	 */
+	public static function render_admin_key_field(): void {
+		$salvata     = Cabina_Orders::admin_key();
+		$segnaposto  = '' === $salvata
+			? 'cab_admin_...'
+			/* translators: %s: the last characters of the saved key, e.g. cab_admin_…1a2b */
+			: sprintf(__('Saved (%s)', 'cabina'), 'cab_admin_…' . substr($salvata, -4));
+		printf(
+			'<input type="password" id="cabina_admin_key" name="%s" value="" class="regular-text" placeholder="%s" autocomplete="new-password" />',
+			esc_attr(CABINA_ADMIN_KEY_OPTION),
+			esc_attr($segnaposto)
+		);
+		printf(
+			'<p class="description">%s</p>',
+			esc_html__(
+				'Needed only for order statistics. Generate it in the Cabina Dashboard → API REST. It is secret: it is never shown again, here or on your store pages. Leave the field empty to keep the saved key; if you regenerate it, paste the new one here.',
+				'cabina'
+			)
+		);
+	}
+
+	/**
+	 * La casella, con l'ultimo errore di invio se c'è.
+	 */
+	public static function render_order_stats_field(): void {
+		printf(
+			'<label><input type="checkbox" id="cabina_order_stats" name="%s" value="1" %s /> %s</label>',
+			esc_attr(CABINA_ORDER_STATS_OPTION),
+			checked((bool) get_option(CABINA_ORDER_STATS_OPTION, false), true, false),
+			esc_html__('Send order statistics to Cabina', 'cabina')
+		);
+		$errore = get_option(CABINA_ORDER_STATS_ERROR_OPTION, '');
+		if (is_string($errore) && '' !== $errore) {
+			printf(
+				'<p class="description" style="color:#b32d2e;">%s</p>',
+				/* translators: %s: date and error message of the last failed delivery */
+				esc_html(sprintf(__('Last delivery error: %s', 'cabina'), $errore))
+			);
+		}
+		printf(
+			'<p class="description">%s</p>',
+			esc_html__(
+				'WooCommerce does not record returns: refunds are counted, the "size" return reason is not available.',
+				'cabina'
+			)
+		);
 	}
 
 	/**

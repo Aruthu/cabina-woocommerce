@@ -5,7 +5,7 @@ Requires at least: 6.5
 Requires Plugins: woocommerce
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 1.2.5
+Stable tag: 1.3.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -58,6 +58,7 @@ This plugin connects your store to Cabina, a third-party service operated by Cab
 * The widget script itself is bundled with the plugin (`assets/widget.iife.js`, unminified) and served from your own site. No code is loaded from Cabina's servers.
 * On product pages the widget requests from the Cabina API (`https://www.cabina.io`) the store's widget configuration, its translations (JSON) and the photos of Cabina's models, using the store's API key.
 * When a customer uses the widget, it sends to the Cabina API (`https://www.cabina.io`) the store's API key, the product page URL and the product image URL, plus the data needed to run the try-on. The customer's photo is uploaded only after their explicit, revocable consent, and is used to estimate body measurements for the size recommendation and to generate the try-on image; both happen on external AI providers listed in Cabina's privacy policy.
+* **Order statistics (optional, off by default).** Only if you enter your Cabina Admin API key and check "Order statistics" in Settings → Cabina, the plugin sends to the Cabina API (`https://www.cabina.io/api/v1/orders`), when an order becomes processing, on hold or completed and when it is refunded: your site address, the order ID, the line item IDs, their quantity and line total (after discounts, before tax), the order currency and date, and the ID of the try-on made in the widget (a random code, only for garments that were tried on). No customer data is sent: no names, emails, addresses, phone numbers or IP addresses. Checking or unchecking the box, and uninstalling the plugin, also notifies Cabina. The data is used to show your store's order and refund statistics, with and without a try-on, in the Cabina Dashboard.
 
 Service provided by Cabina — [Privacy policy](https://cabina.io/privacy) · [Terms of service](https://cabina.io/termini)
 
@@ -103,7 +104,11 @@ Yes. The widget ships inside the plugin, so new widget versions arrive as plugin
 
 = What happens if I uninstall the plugin? =
 
-All settings (API key included) are removed from the database. No leftovers.
+All settings (API keys included) are removed from the database. If order statistics were on, Cabina is told they are off. The try-on ID saved on order lines (a hidden `_cabina` field) stays in your orders, like any other order data.
+
+= What are order statistics? =
+
+An optional section of the Cabina Dashboard (Metrics → Orders and returns, Starter plan or higher): how many orders include a garment the shopper tried on, what they are worth and how many are refunded, compared with orders without a try-on. It is off until you add the Admin API key and check "Order statistics" in Settings → Cabina. WooCommerce does not record returns, so refunds are counted and the "size" return reason is not available.
 
 = Does it work with any WooCommerce theme? =
 
@@ -117,6 +122,14 @@ Yes. The plugin uses standard WooCommerce hooks. If your theme does not support 
 4. The Cabina Dashboard, where you customize the widget
 
 == Changelog ==
+
+= 1.3.0 =
+
+* Optional order statistics (off by default): with the Admin API key and the "Order statistics" box in Settings → Cabina, the Cabina Dashboard shows orders and refunds with and without a try-on. Only order and line IDs, quantity, line total, currency, date and the try-on ID are sent; no customer data
+* The try-on ID is carried from the product form to the order line (hidden `_cabina` field), with classic and block checkout
+* Declared compatible with WooCommerce High-Performance Order Storage (HPOS) and the block checkout
+* `CABINA_API_URL` can be overridden in `wp-config.php`
+* Widget updated to the current release: when zoomed in, a tap on the photo brings the before/after slider there; after a completed try-on the widget marks the product form so the order can be linked to the try-on
 
 = 1.2.5 =
 

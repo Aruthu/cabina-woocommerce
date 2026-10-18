@@ -286,13 +286,6 @@ export function createZoomHandler(callbacks: ZoomCallbacks): ZoomHandler {
     pointerStartTx = currentTransform.translateX;
     pointerStartTy = currentTransform.translateY;
     e.preventDefault();
-    // Il trascinamento continua anche se il puntatore esce dal riquadro
-    // (a 3× il bordo è vicino): senza la cattura il pan si fermava lì.
-    try {
-      container?.setPointerCapture(e.pointerId);
-    } catch {
-      /* jsdom e browser vecchi: si trascina finché si resta dentro */
-    }
   }
 
   function handlePointerMove(e: PointerEvent): void {
@@ -300,7 +293,19 @@ export function createZoomHandler(callbacks: ZoomCallbacks): ZoomHandler {
 
     const deltaX = e.clientX - pointerStartX;
     const deltaY = e.clientY - pointerStartY;
-    if (Math.abs(deltaX) > DRAG_THRESHOLD || Math.abs(deltaY) > DRAG_THRESHOLD) trascinato = true;
+    if (!trascinato && (Math.abs(deltaX) > DRAG_THRESHOLD || Math.abs(deltaY) > DRAG_THRESHOLD)) {
+      trascinato = true;
+      // Il trascinamento continua anche se il puntatore esce dal riquadro
+      // (a 3× il bordo è vicino): senza la cattura il pan si fermava lì.
+      // ⚠️ 17/10/2026 — la cattura parte qui e non al pointerdown: catturato,
+      // anche un tocco fermo finiva al contenitore e non al reveal slider, e da
+      // ingrandita la barra, uscita dalla vista, non si riportava più col tocco.
+      try {
+        container?.setPointerCapture(e.pointerId);
+      } catch {
+        /* jsdom e browser vecchi: si trascina finché si resta dentro */
+      }
+    }
     updateTransform({ translateX: pointerStartTx + deltaX, translateY: pointerStartTy + deltaY });
   }
 

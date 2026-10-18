@@ -3625,22 +3625,29 @@
   }).refine((r) => r.hipsMin <= r.hipsMax, {
     message: "hipsMin deve essere <= hipsMax",
     path: ["hipsMin"]
-  }).refine((r) => r.bustMax === 0 || r.bustMax >= 45, {
-    message: "Sembrano pollici: inserisci i centimetri",
-    path: ["bustMax"]
-  }).refine((r) => r.waistMax === 0 || r.waistMax >= 45, {
-    message: "Sembrano pollici: inserisci i centimetri",
-    path: ["waistMax"]
-  }).refine((r) => r.hipsMax === 0 || r.hipsMax >= 45, {
-    message: "Sembrano pollici: inserisci i centimetri",
-    path: ["hipsMax"]
   });
   const SizeTableDataSchema = arrayType(SizeTableRowSchema).min(1, "La tabella deve contenere almeno una riga").max(100, "Massimo 100 righe per tabella");
+  const SOGLIA_POLLICI_CM = { adult: 45, kids: 30 };
+  const CAMPI_POLLICI = ["bustMax", "waistMax", "hipsMax"];
   objectType({
     name: stringType().min(1).max(100),
     data: SizeTableDataSchema,
     category: SizeTableCategorySchema.nullable().optional(),
     audience: SizeTableAudienceSchema.default("adult")
+  }).superRefine((tabella, ctx) => {
+    const soglia = SOGLIA_POLLICI_CM[tabella.audience];
+    tabella.data.forEach((riga2, i) => {
+      for (const campo of CAMPI_POLLICI) {
+        if (riga2[campo] !== 0 && riga2[campo] < soglia) {
+          ctx.addIssue({
+            code: "custom",
+            path: ["data", i, campo],
+            message: "Sembrano pollici: inserisci i centimetri",
+            params: { soglia }
+          });
+        }
+      }
+    });
   });
   const PhotoConsentSchema = objectType({
     given: booleanType(),
@@ -6204,16 +6211,18 @@
       pointerStartTx = currentTransform.translateX;
       pointerStartTy = currentTransform.translateY;
       e.preventDefault();
-      try {
-        container?.setPointerCapture(e.pointerId);
-      } catch {
-      }
     }
     function handlePointerMove(e) {
       if (!pointerPanning) return;
       const deltaX = e.clientX - pointerStartX;
       const deltaY = e.clientY - pointerStartY;
-      if (Math.abs(deltaX) > DRAG_THRESHOLD || Math.abs(deltaY) > DRAG_THRESHOLD) trascinato = true;
+      if (!trascinato && (Math.abs(deltaX) > DRAG_THRESHOLD || Math.abs(deltaY) > DRAG_THRESHOLD)) {
+        trascinato = true;
+        try {
+          container?.setPointerCapture(e.pointerId);
+        } catch {
+        }
+      }
       updateTransform({ translateX: pointerStartTx + deltaX, translateY: pointerStartTy + deltaY });
     }
     function handlePointerUp() {
@@ -7902,8 +7911,10 @@
   }
   const CAMPO_ATTRIBUZIONE = "properties[_cabina]";
   let ultimaSessione = null;
-  function suShopify() {
-    return typeof window !== "undefined" && "Shopify" in window;
+  function conLettore() {
+    if (typeof window === "undefined") return false;
+    if ("Shopify" in window) return true;
+    return document.querySelector("form.cart") !== null;
   }
   function formAcquisto() {
     const vicino = document.querySelector("[data-cabina-widget-btn]")?.closest("form");
@@ -7914,12 +7925,12 @@
     return candidati.length === 1 ? candidati[0] : null;
   }
   function attribuzioneDaRimettere() {
-    if (!ultimaSessione || !suShopify()) return false;
+    if (!ultimaSessione || !conLettore()) return false;
     const form = formAcquisto();
     return form !== null && !form.querySelector(`input[name="${CAMPO_ATTRIBUZIONE}"]`);
   }
   function segnaProvaNelForm(sessionId) {
-    if (!sessionId || !suShopify()) return false;
+    if (!sessionId || !conLettore()) return false;
     ultimaSessione = sessionId;
     const form = formAcquisto();
     if (!form) return false;

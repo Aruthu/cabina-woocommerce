@@ -91,26 +91,6 @@ export const SizeTableRowSchema = z
   .refine((r) => r.hipsMin <= r.hipsMax, {
     message: 'hipsMin deve essere <= hipsMax',
     path: ['hipsMin'],
-  })
-  // ⚠️ 16/10/2026 — una tabella in pollici passava (è tutto fra 0 e 300) e il
-  // widget la leggeva in centimetri: a ogni acquirente la taglia più grande.
-  // Un busto o dei fianchi sotto i 45 cm non esistono nemmeno nelle tabelle
-  // bambini (le modelle minorenni partono dai 7 anni, ~60 cm), mentre in
-  // pollici ogni tabella adulta ha righe fra 30 e 45. Anche la vita (rilievo
-  // Kilo, #332): i pantaloni misurati solo in vita (W30, W32) passavano; a 7
-  // anni la vita è già sopra i 50 cm. Il piede resta fuori: 25 cm è una misura
-  // vera. 0 = non dichiarato.
-  .refine((r) => r.bustMax === 0 || r.bustMax >= 45, {
-    message: 'Sembrano pollici: inserisci i centimetri',
-    path: ['bustMax'],
-  })
-  .refine((r) => r.waistMax === 0 || r.waistMax >= 45, {
-    message: 'Sembrano pollici: inserisci i centimetri',
-    path: ['waistMax'],
-  })
-  .refine((r) => r.hipsMax === 0 || r.hipsMax >= 45, {
-    message: 'Sembrano pollici: inserisci i centimetri',
-    path: ['hipsMax'],
   });
 
 export type SizeTableRow = z.infer<typeof SizeTableRowSchema>;
@@ -121,13 +101,46 @@ export const SizeTableDataSchema = z
   .min(1, 'La tabella deve contenere almeno una riga')
   .max(100, 'Massimo 100 righe per tabella');
 
+/**
+ * ⚠️ 16/10/2026 — una tabella in pollici passava (è tutto fra 0 e 300) e il
+ * widget la leggeva in centimetri: a ogni acquirente la taglia più grande. Sotto
+ * queste soglie busto, vita o fianchi «sembrano pollici»: in pollici ogni
+ * tabella adulta ha righe fra 30 e 45, anche i pantaloni misurati solo in vita
+ * (W30, W32 — rilievo Kilo, #332). Il piede resta fuori: 25 cm è una misura vera.
+ *
+ * 17/10/2026 — la soglia dipende dal pubblico (rilievo Kilo, #338): con 45 fisso
+ * una tabella da neonati (taglie 50–68, petto e vita 36–46 cm) non si salvava.
+ * Per i bambini 30: il petto di un neonato è ~33 cm, mentre una tabella bambini
+ * in pollici (petto 20–28) resta respinta.
+ */
+export const SOGLIA_POLLICI_CM: Record<SizeTableAudience, number> = { adult: 45, kids: 30 };
+
+const CAMPI_POLLICI = ['bustMax', 'waistMax', 'hipsMax'] as const;
+
 /** Payload per upload CSV / inserimento manuale. */
-export const SizeTableCreateSchema = z.object({
-  name: z.string().min(1).max(100),
-  data: SizeTableDataSchema,
-  category: SizeTableCategorySchema.nullable().optional(),
-  audience: SizeTableAudienceSchema.default('adult'),
-});
+export const SizeTableCreateSchema = z
+  .object({
+    name: z.string().min(1).max(100),
+    data: SizeTableDataSchema,
+    category: SizeTableCategorySchema.nullable().optional(),
+    audience: SizeTableAudienceSchema.default('adult'),
+  })
+  .superRefine((tabella, ctx) => {
+    const soglia = SOGLIA_POLLICI_CM[tabella.audience];
+    tabella.data.forEach((riga, i) => {
+      for (const campo of CAMPI_POLLICI) {
+        // 0 = non dichiarato.
+        if (riga[campo] !== 0 && riga[campo] < soglia) {
+          ctx.addIssue({
+            code: 'custom',
+            path: ['data', i, campo],
+            message: 'Sembrano pollici: inserisci i centimetri',
+            params: { soglia },
+          });
+        }
+      }
+    });
+  });
 
 // ─── URL pagina prodotto (chiave capo) ───────────────────────────────────
 

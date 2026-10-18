@@ -13,7 +13,11 @@
  *
  * 📌 Niente attributo di carrello: con «Buy it now» il carrello viene
  * saltato e `note_attributes` arriva vuoto (T0.4), quindi la proprietà di
- * riga è l'unica fonte. Solo su Shopify: altrove il campo non avrebbe lettore.
+ * riga è l'unica fonte. Solo dove c'è chi lo legge: Shopify, e dal 18/10/2026
+ * WooCommerce, dove il plugin Cabina prende lo stesso campo dal POST
+ * dell'«aggiungi al carrello» (`form.cart`) e lo porta sulla riga d'ordine.
+ * Il nome resta `properties[_cabina]` anche lì: al plugin arriva come
+ * `$_POST['properties']['_cabina']`.
  *
  * ⚠️ Un tema che ridisegna il form perde il campo: `rimettiAttribuzione` lo
  * riscrive quando il widget reinserisce il proprio pulsante, con l'ultima
@@ -31,8 +35,13 @@ export function __resetAttribuzioneForTesting(): void {
   ultimaSessione = null;
 }
 
-function suShopify(): boolean {
-  return typeof window !== 'undefined' && 'Shopify' in window;
+function conLettore(): boolean {
+  if (typeof window === 'undefined') return false;
+  if ('Shopify' in window) return true;
+  // WooCommerce: il form d'acquisto della scheda prodotto è `form.cart`
+  // (temi classici e blocco «Aggiungi al carrello» con opzioni). PrestaShop
+  // e Wix non ancora: il loro modulo non legge il campo.
+  return document.querySelector('form.cart') !== null;
 }
 
 /**
@@ -58,7 +67,7 @@ export function formAcquisto(): HTMLFormElement | null {
 
 /** C'è una prova segnata, un form, e il campo non c'è più (il tema ha ridisegnato il form). */
 export function attribuzioneDaRimettere(): boolean {
-  if (!ultimaSessione || !suShopify()) return false;
+  if (!ultimaSessione || !conLettore()) return false;
   const form = formAcquisto();
   return form !== null && !form.querySelector(`input[name="${CAMPO_ATTRIBUZIONE}"]`);
 }
@@ -68,7 +77,7 @@ export function attribuzioneDaRimettere(): boolean {
  * @returns true se il campo è nel form adesso.
  */
 export function segnaProvaNelForm(sessionId: string | null): boolean {
-  if (!sessionId || !suShopify()) return false;
+  if (!sessionId || !conLettore()) return false;
   ultimaSessione = sessionId;
   const form = formAcquisto();
   if (!form) return false;
