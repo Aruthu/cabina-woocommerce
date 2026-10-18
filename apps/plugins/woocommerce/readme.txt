@@ -5,7 +5,7 @@ Requires at least: 6.5
 Requires Plugins: woocommerce
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 1.3.0
+Stable tag: 1.3.1
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -122,6 +122,13 @@ Yes. The plugin uses standard WooCommerce hooks. If your theme does not support 
 4. The Cabina Dashboard, where you customize the widget
 
 == Changelog ==
+
+= 1.3.1 =
+
+* Settings → Cabina: a "Remove the saved key" box removes the Admin API key (and turns order statistics off, telling Cabina)
+* Turning on order statistics uses the key just entered, and waits at most 5 seconds for Cabina instead of 10
+* Uninstall unschedules pending order statistics deliveries by the plugin's own action name
+* Widget updated to the current release: the try-on ID is also written into the PrestaShop product form (no change for WooCommerce stores)
 
 = 1.3.0 =
 

@@ -14,6 +14,31 @@ defined('ABSPATH') || exit;
 class Cabina_Settings {
 
 	/**
+	 * La Admin API key come esce dalla sanitize di questo salvataggio (null =
+	 * non ancora passata): la casella la usa direttamente, invece di rileggerla
+	 * con get_option (rilievo Kilo sulla 1.3.0).
+	 *
+	 * @var string|null
+	 */
+	private static $chiave_ora = null;
+
+	/**
+	 * Vero se in questo salvataggio il negoziante ha tolto la chiave.
+	 *
+	 * @var bool
+	 */
+	private static $chiave_rimossa = false;
+
+	/**
+	 * Esito dell'accensione già deciso in questa richiesta: al primo
+	 * salvataggio WordPress passa due volte dalla sanitize (update_option →
+	 * add_option), e Cabina non va chiamata due volte.
+	 *
+	 * @var bool|null
+	 */
+	private static $esito_casella = null;
+
+	/**
 	 * Inizializza gli hook per la settings page.
 	 */
 	public static function init(): void {
@@ -64,8 +89,9 @@ class Cabina_Settings {
 		);
 
 		// Statistiche ordini: la Admin API key PRIMA della casella, perché
-		// WordPress salva le opzioni nell'ordine di registrazione e la casella,
-		// accendendosi, usa la chiave appena salvata.
+		// WordPress sanifica le opzioni nell'ordine di registrazione e la
+		// casella, accendendosi, usa la chiave che la sanitize le passa
+		// (`$chiave_ora`). In ordine inverso userebbe la chiave salvata prima.
 		register_setting(
 			CABINA_SETTINGS_OPTION_GROUP,
 			CABINA_ADMIN_KEY_OPTION,
@@ -115,23 +141,44 @@ class Cabina_Settings {
 	 * quando non la si cambia (la pagina non la ristampa): vuoto = resta la
 	 * chiave salvata.
 	 *
+	 * Dal form arriva un array (`[key]` e la casella `[remove]`, così non serve
+	 * leggere `$_POST`); una stringa resta accettata (update_option diretto e
+	 * seconda passata di add_option).
+	 *
+	 * «Rimuovi la chiave» spegne anche le statistiche: lo si dice a Cabina
+	 * subito, con la chiave che sta per sparire (dopo non ci sarebbe più con
+	 * che mandare il `disable` in coda).
+	 *
 	 * @param mixed $value Valore inviato dal form.
 	 */
 	public static function sanitize_admin_key($value): string {
-		$key = sanitize_text_field((string) $value);
-		if ('' === $key) {
-			return Cabina_Orders::admin_key();
+		$rimuovi = is_array($value) && !empty($value['remove']);
+		$key     = sanitize_text_field((string) (is_array($value) ? ($value['key'] ?? '') : $value));
+
+		if ($rimuovi) {
+			if (Cabina_Orders::enabled()) {
+				Cabina_Orders::call(['event' => 'disable']);
+			}
+			Cabina_Orders::$dal_server = true;
+			update_option(CABINA_ORDER_STATS_OPTION, false);
+			Cabina_Orders::$dal_server = false;
+			self::$chiave_rimossa = true;
+			self::$chiave_ora     = '';
+			return '';
 		}
 
-		if (1 !== preg_match('/^cab_admin_[0-9a-f]{32}$/', $key)) {
+		if ('' === $key) {
+			$key = Cabina_Orders::admin_key();
+		} elseif (1 !== preg_match('/^cab_admin_[0-9a-f]{32}$/', $key)) {
 			add_settings_error(
 				CABINA_ADMIN_KEY_OPTION,
 				'cabina_admin_key_invalid',
 				esc_html__('The Cabina Admin API key must start with "cab_admin_" followed by 32 characters. The key was not saved.', 'cabina')
 			);
-			return Cabina_Orders::admin_key();
+			$key = Cabina_Orders::admin_key();
 		}
 
+		self::$chiave_ora = $key;
 		return $key;
 	}
 
@@ -147,6 +194,22 @@ class Cabina_Settings {
 		if (Cabina_Orders::$dal_server) {
 			return $accesa;
 		}
+		if (null === self::$esito_casella) {
+			self::$esito_casella = self::decidi_casella($accesa);
+		}
+		return self::$esito_casella;
+	}
+
+	/**
+	 * La decisione vera della casella, una volta per richiesta.
+	 *
+	 * @param bool $accesa Casella spuntata nel form.
+	 */
+	private static function decidi_casella(bool $accesa): bool {
+		// Chiave appena tolta: le statistiche sono già spente e Cabina avvisata.
+		if (self::$chiave_rimossa) {
+			return false;
+		}
 		$prima = (bool) get_option(CABINA_ORDER_STATS_OPTION, false);
 		if ($accesa === $prima) {
 			return $accesa;
@@ -157,7 +220,8 @@ class Cabina_Settings {
 			return false;
 		}
 
-		if ('' === Cabina_Orders::admin_key()) {
+		$chiave = null === self::$chiave_ora ? Cabina_Orders::admin_key() : self::$chiave_ora;
+		if ('' === $chiave) {
 			add_settings_error(
 				CABINA_ORDER_STATS_OPTION,
 				'cabina_order_stats_no_key',
@@ -166,7 +230,7 @@ class Cabina_Settings {
 			return false;
 		}
 
-		list($codice, $json, $errore) = Cabina_Orders::call(['event' => 'enable']);
+		list($codice, $json, $errore) = Cabina_Orders::call(['event' => 'enable'], $chiave);
 		if (200 === $codice && is_array($json) && !empty($json['data']['enabled'])) {
 			$dal = isset($json['data']['enabled_at']) ? strtotime((string) $json['data']['enabled_at']) : false;
 			update_option(CABINA_ORDER_STATS_SINCE_OPTION, $dal ? $dal : time(), false);
@@ -209,10 +273,17 @@ class Cabina_Settings {
 			/* translators: %s: the last characters of the saved key, e.g. cab_admin_…1a2b */
 			: sprintf(__('Saved (%s)', 'cabina'), 'cab_admin_…' . substr($salvata, -4));
 		printf(
-			'<input type="password" id="cabina_admin_key" name="%s" value="" class="regular-text" placeholder="%s" autocomplete="new-password" />',
+			'<input type="password" id="cabina_admin_key" name="%s[key]" value="" class="regular-text" placeholder="%s" autocomplete="new-password" />',
 			esc_attr(CABINA_ADMIN_KEY_OPTION),
 			esc_attr($segnaposto)
 		);
+		if ('' !== $salvata) {
+			printf(
+				'<p><label><input type="checkbox" id="cabina_admin_key_remove" name="%s[remove]" value="1" /> %s</label></p>',
+				esc_attr(CABINA_ADMIN_KEY_OPTION),
+				esc_html__('Remove the saved key (also turns order statistics off)', 'cabina')
+			);
+		}
 		printf(
 			'<p class="description">%s</p>',
 			esc_html__(

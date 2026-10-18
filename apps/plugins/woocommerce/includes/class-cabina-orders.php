@@ -306,17 +306,22 @@ class Cabina_Orders {
 	/**
 	 * Chiama Cabina con un evento.
 	 *
-	 * @param array $corpo Evento, senza piattaforma e negozio.
+	 * 5 secondi: l'accensione dalla pagina delle impostazioni è sincrona e il
+	 * negoziante aspetta la risposta (rilievo Kilo sulla 1.3.0); in background
+	 * un timeout è solo un ritentativo.
+	 *
+	 * @param array       $corpo  Evento, senza piattaforma e negozio.
+	 * @param string|null $chiave Admin API key da usare; null = quella salvata.
 	 * @return array{0:int,1:mixed,2:string} Codice HTTP (0 = rete), JSON, messaggio d'errore.
 	 */
-	public static function call(array $corpo): array {
+	public static function call(array $corpo, ?string $chiave = null): array {
 		$risposta = wp_remote_post(
 			CABINA_API_URL . '/api/v1/orders',
 			[
-				'timeout' => 10,
+				'timeout' => 5,
 				'headers' => [
 					'Content-Type' => 'application/json',
-					'X-Admin-Key'  => self::admin_key(),
+					'X-Admin-Key'  => null === $chiave ? self::admin_key() : $chiave,
 				],
 				'body'    => wp_json_encode(array_merge(['platform' => 'woocommerce', 'store' => self::store_id()], $corpo)),
 			]

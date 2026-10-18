@@ -7914,7 +7914,7 @@
   function conLettore() {
     if (typeof window === "undefined") return false;
     if ("Shopify" in window) return true;
-    return document.querySelector("form.cart") !== null;
+    return document.querySelector("form.cart, form#add-to-cart-or-refresh") !== null;
   }
   function formAcquisto() {
     const vicino = document.querySelector("[data-cabina-widget-btn]")?.closest("form");

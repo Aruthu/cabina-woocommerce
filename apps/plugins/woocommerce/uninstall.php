@@ -28,7 +28,7 @@ if (get_option('cabina_order_stats', false) && '' !== Cabina_Orders::admin_key()
 }
 // Invii ancora in coda: senza il plugin non avrebbero chi li esegue.
 if (function_exists('as_unschedule_all_actions')) {
-	as_unschedule_all_actions('cabina_order_stats_send');
+	as_unschedule_all_actions(Cabina_Orders::ACTION);
 }
 
 // Rimuovi tutte le opzioni registrate dal plugin

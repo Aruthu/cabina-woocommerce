@@ -17,7 +17,9 @@
  * WooCommerce, dove il plugin Cabina prende lo stesso campo dal POST
  * dell'«aggiungi al carrello» (`form.cart`) e lo porta sulla riga d'ordine.
  * Il nome resta `properties[_cabina]` anche lì: al plugin arriva come
- * `$_POST['properties']['_cabina']`.
+ * `$_POST['properties']['_cabina']`. Così anche su PrestaShop (modulo 1.4.0):
+ * il form è `#add-to-cart-or-refresh`, che il tema manda serializzato al
+ * carrello, e il modulo lo legge in `actionCartUpdateQuantityBefore`.
  *
  * ⚠️ Un tema che ridisegna il form perde il campo: `rimettiAttribuzione` lo
  * riscrive quando il widget reinserisce il proprio pulsante, con l'ultima
@@ -39,9 +41,9 @@ function conLettore(): boolean {
   if (typeof window === 'undefined') return false;
   if ('Shopify' in window) return true;
   // WooCommerce: il form d'acquisto della scheda prodotto è `form.cart`
-  // (temi classici e blocco «Aggiungi al carrello» con opzioni). PrestaShop
-  // e Wix non ancora: il loro modulo non legge il campo.
-  return document.querySelector('form.cart') !== null;
+  // (temi classici e blocco «Aggiungi al carrello» con opzioni). PrestaShop:
+  // `#add-to-cart-or-refresh` (tema classic e derivati). Wix non ancora.
+  return document.querySelector('form.cart, form#add-to-cart-or-refresh') !== null;
 }
 
 /**
