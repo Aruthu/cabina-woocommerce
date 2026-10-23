@@ -119,7 +119,10 @@ function creaStageSullaFoto(): HTMLElement | null {
     const stage = document.createElement('div');
     stage.setAttribute(STAGE_ATTR, '');
     stage.setAttribute(AUTO_ATTR, '');
-    stage.style.cssText = 'position:absolute;inset:0;z-index:1;overflow:hidden;background:#fff;';
+    // z-index 3, non 1 (22/10/2026, valetta.fr): Dawn stende sopra la foto il
+    // `::after` del pulsante zoom, assoluto e a z-index 2. Con 1 la prova stava
+    // sotto: manina al posto delle frecce, e il clic apriva lo zoom del tema.
+    stage.style.cssText = 'position:absolute;inset:0;z-index:3;overflow:hidden;background:#fff;';
     host.appendChild(stage);
     return stage;
   }

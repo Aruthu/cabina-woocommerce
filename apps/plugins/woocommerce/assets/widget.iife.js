@@ -6918,7 +6918,7 @@
       const stage = document.createElement("div");
       stage.setAttribute(STAGE_ATTR, "");
       stage.setAttribute(AUTO_ATTR, "");
-      stage.style.cssText = "position:absolute;inset:0;z-index:1;overflow:hidden;background:#fff;";
+      stage.style.cssText = "position:absolute;inset:0;z-index:3;overflow:hidden;background:#fff;";
       host.appendChild(stage);
       return stage;
     }
