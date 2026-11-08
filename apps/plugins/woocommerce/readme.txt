@@ -5,7 +5,7 @@ Requires at least: 6.5
 Requires Plugins: woocommerce
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 1.3.2
+Stable tag: 1.3.3
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -43,7 +43,7 @@ The virtual try-on shows how the garment looks on the shopper; the size recommen
 * **Reduce returns** — Size recommendations cut returns caused by wrong sizes
 * **Nothing for shoppers to install** — The virtual fitting room runs directly in the customer's browser, mobile included
 * **Free plan** — Start free, with no credit card; paid plans for stores that need more try-ons
-* **8 languages** — The widget speaks Italian, English, French, Spanish, German, Japanese, Brazilian Portuguese and Indonesian
+* **7 languages** — The widget speaks Italian, English, French, Spanish, German, Brazilian Portuguese and Indonesian
 * **No external code** — The widget script ships inside the plugin and is served from your own site; the try-on, the widget configuration, its translations and the model photos come from Cabina's API
 * **Privacy and consent** — Nothing leaves the customer's device without explicit, revocable consent. With consent, the photo is sent to external AI providers to estimate measurements and generate the try-on image; the estimated measurements are not stored, and the generated image is kept for at most 7 days
 
@@ -108,7 +108,7 @@ All settings (API keys included) are removed from the database. If order statist
 
 = What are order statistics? =
 
-An optional section of the Cabina Dashboard (Metrics → Orders and returns, Starter plan or higher): how many orders include a garment the shopper tried on, what they are worth and how many are refunded, compared with orders without a try-on. It is off until you add the Admin API key and check "Order statistics" in Settings → Cabina. WooCommerce does not record returns, so refunds are counted and the "size" return reason is not available.
+An optional section of the Cabina Dashboard (Metrics → Orders and returns, on every plan): how many orders include a garment the shopper tried on, what they are worth and how many are refunded, compared with orders without a try-on. It is off until you add the Admin API key and check "Order statistics" in Settings → Cabina. WooCommerce does not record returns, so refunds are counted and the "size" return reason is not available.
 
 = Does it work with any WooCommerce theme? =
 
@@ -122,6 +122,10 @@ Yes. The plugin uses standard WooCommerce hooks. If your theme does not support 
 4. The Cabina Dashboard, where you customize the widget
 
 == Changelog ==
+
+= 1.3.3 =
+
+* Order statistics are now available on every Cabina plan, Freemium included: the settings page no longer says "Starter plan or higher"
 
 = 1.3.2 =
 
@@ -167,7 +171,7 @@ Yes. The plugin uses standard WooCommerce hooks. If your theme does not support 
 = 1.2.0 =
 
 * Widget updated: three garments can be tried on together, fit preference (fitted, regular, relaxed), size recommendation from height and weight, and 40 preset models instead of 8
-* Widget interface available in 8 languages: Italian, English, French, Spanish, German, Japanese, Brazilian Portuguese and Indonesian
+* Widget interface available in 7 languages: Italian, English, French, Spanish, German, Brazilian Portuguese and Indonesian
 * Generated images are kept for 7 days (was 30)
 * The API key is now rejected with a message if it does not start with `cab_live_`, instead of being saved silently
 * Requires WordPress 6.5 or later, the version that introduced the `Requires Plugins` header this plugin uses

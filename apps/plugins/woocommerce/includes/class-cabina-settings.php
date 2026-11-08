@@ -255,7 +255,7 @@ class Cabina_Settings {
 		printf(
 			'<p>%s</p>',
 			esc_html__(
-				'Optional, off until you turn it on (Starter plan or higher). Cabina\'s dashboard then shows how many orders come from a try-on, what they are worth and how many are refunded, with and without a try-on. For each paid order the plugin sends to Cabina only the order and line IDs, quantity, line total, currency, date and the try-on ID: no customer data (no names, emails, addresses, phone numbers or IP addresses).',
+				'Optional, off until you turn it on, on every plan. Cabina\'s dashboard then shows how many orders come from a try-on, what they are worth and how many are refunded, with and without a try-on. For each paid order the plugin sends to Cabina only the order and line IDs, quantity, line total, currency, date and the try-on ID: no customer data (no names, emails, addresses, phone numbers or IP addresses).',
 				'cabina'
 			)
 		);

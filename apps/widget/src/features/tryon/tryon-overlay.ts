@@ -48,6 +48,8 @@ let barraObserver: ResizeObserver | null = null;
 /** Spazio fra il riquadro e la barra a tutto schermo: è il `gap` dell'overlay
  *  ED è quello che l'osservatore sottrae al riquadro — un numero solo. */
 const SPAZIO_BARRA = 10;
+/** Sotto questa larghezza il badge a tutto schermo va sotto la foto (vedi `mountSizeBadge`). */
+const TELEFONO = '(max-width: 640px)';
 
 /**
  * Percentuale accanto alla taglia: SPENTA di default dal 18/09/2026 (Arou).
@@ -388,7 +390,22 @@ function mountSizeBadge(
   const imageContainer =
     imageContainerRef ?? overlay.querySelector<HTMLElement>('[data-cabina-tryon-image-container]');
 
-  const badge = buildSizeBadge(recommendation, themeHost != null);
+  // A tutto schermo su un telefono (24/10/2026, Arou sull'OPPO A5, 360 px): sopra
+  // la foto il badge ne copriva metà e anche «Trascina per confrontare». Lì va
+  // sotto il riquadro, in flusso come inline; il ResizeObserver gli cede lo spazio.
+  const sottoFoto = !inline && !!window.matchMedia?.(TELEFONO).matches;
+
+  const badge = buildSizeBadge(recommendation, themeHost != null || sottoFoto);
+  if (sottoFoto) {
+    // `order`: alla creazione il riquadro e la barra entrano nell'overlay dopo il badge.
+    badge.style.flex = 'none';
+    badge.style.order = '1';
+    if (imageContainer?.offsetWidth) badge.style.width = `${imageContainer.offsetWidth}px`;
+    overlay.appendChild(badge);
+    barraObserver?.observe(badge);
+    sizeBadgeElement = badge;
+    return badge;
+  }
   // Inline nello slot c'è anche la barra delle azioni (dal 24/09): il badge le
   // va DAVANTI, qualunque dei due percorsi arrivi per primo.
   const barra = themeHost?.querySelector<HTMLElement>('[data-cabina-tryon-bottom-bar]') ?? null;
@@ -570,7 +587,8 @@ export function showTryOnOverlay(
     // (l'osservatore al montaggio, più sotto, cede al riquadro lo spazio
     // che la barra si prende).
     bottomBar.style.cssText = [
-      ...(inline ? ['width:100%'] : ['flex:none', 'box-sizing:border-box']),
+      // `order:2`: sotto il badge quando sta sotto la foto (`mountSizeBadge`).
+      ...(inline ? ['width:100%'] : ['flex:none', 'box-sizing:border-box', 'order:2']),
       'display:flex',
       'flex-direction:column',
       'gap:8px',
@@ -1079,26 +1097,33 @@ export function showTryOnOverlay(
       : null;
     (slot ?? overlay).appendChild(bottomBar);
     bottomBarElement = bottomBar;
-    if (!inline && typeof ResizeObserver !== 'undefined') {
-      // Il riquadro era limitato a 90vh; ora quel 90vh se lo dividono lui e la
-      // barra, che cambia altezza quando arriva il pannello del look.
-      const barra = bottomBar;
-      barraObserver = new ResizeObserver(() => {
-        const maxH = Math.max(120, overlay.clientHeight * 0.9 - barra.offsetHeight - SPAZIO_BARRA);
-        overlay
-          .querySelectorAll<HTMLElement>(
-            '[data-cabina-tryon-image-container],[data-cabina-tryon-sizer],[data-cabina-tryon-image]',
-          )
-          .forEach((el) => {
-            el.style.maxHeight = `${maxH}px`;
-          });
-        // Larga quanto il riquadro, che ha la sua misura solo a immagine caricata.
-        if (imageContainer.offsetWidth) barra.style.width = `${imageContainer.offsetWidth}px`;
-      });
-      barraObserver.observe(overlay);
-      barraObserver.observe(bottomBar);
-      barraObserver.observe(imageContainer);
-    }
+  }
+  if (!inline && typeof ResizeObserver !== 'undefined') {
+    // Il riquadro era limitato a 90vh; ora quel 90vh se lo dividono lui, la
+    // barra (che cambia altezza quando arriva il pannello del look) e, sul
+    // telefono, il badge sotto la foto.
+    const barra = bottomBar;
+    const sotto = (): HTMLElement[] =>
+      [barra, sizeBadgeElement].filter((el): el is HTMLElement => el?.parentElement === overlay);
+    barraObserver = new ResizeObserver(() => {
+      const occupato = sotto().reduce((h, el) => h + el.offsetHeight + SPAZIO_BARRA, 0);
+      const maxH = Math.max(120, overlay.clientHeight * 0.9 - occupato);
+      overlay
+        .querySelectorAll<HTMLElement>(
+          '[data-cabina-tryon-image-container],[data-cabina-tryon-sizer],[data-cabina-tryon-image]',
+        )
+        .forEach((el) => {
+          el.style.maxHeight = `${maxH}px`;
+        });
+      // Larghi quanto il riquadro, che ha la sua misura solo a immagine caricata.
+      if (imageContainer.offsetWidth) {
+        for (const el of sotto()) el.style.width = `${imageContainer.offsetWidth}px`;
+      }
+    });
+    barraObserver.observe(overlay);
+    barraObserver.observe(imageContainer);
+    // Il badge montato in creazione è nato prima dell'osservatore; quelli di `updateSizeBadge` li aggiunge `mountSizeBadge`.
+    for (const el of sotto()) barraObserver.observe(el);
   }
 
   // Inietta animazione CSS se non già presente

@@ -58,6 +58,38 @@ function modelAriaLabel(model: PresetModel): string {
   return `${getLocaleString(GENDER_LABEL_KEYS[model.gender])}${band} ${modelLabel(model)}`;
 }
 
+/** L'ultima scelta: la cornice resta anche tornando indietro dalle misure. */
+let sceltaId: string | null = null;
+
+function disegnaScelta(card: HTMLElement, scelta: boolean): void {
+  // Un'ombra, non il bordo: un bordo più spesso sposterebbe la griglia.
+  card.style.boxShadow = scelta ? '0 0 0 2px #000' : 'none';
+  card.setAttribute('aria-pressed', String(scelta));
+}
+
+/** Segna la modella scelta e toglie il segno alle altre; `null` non ne segna nessuna. */
+export function segnaModellaScelta(container: ParentNode, id: string | null): void {
+  sceltaId = id;
+  container.querySelectorAll<HTMLElement>('[data-cabina-model-card]').forEach((card) => {
+    disegnaScelta(card, card.getAttribute('data-cabina-model-card') === id);
+  });
+}
+
+/** Fine sessione: alla riapertura, anche su un altro prodotto, nessuna modella è scelta. */
+export function dimenticaModellaScelta(): void {
+  sceltaId = null;
+}
+
+/** La foto scelta in cima allo step misure: lì la griglia non c'è più. */
+export function createFotoScelta(src: string): HTMLImageElement {
+  const img = document.createElement('img');
+  img.src = src;
+  img.alt = '';
+  img.setAttribute('data-cabina-foto-scelta', '');
+  img.style.cssText = 'display:block;height:120px;max-width:100%;object-fit:contain;margin:0 auto 12px;border-radius:8px;';
+  return img;
+}
+
 function createModelCard(model: PresetModel, onSelect: (model: PresetModel) => void): HTMLButtonElement {
   const card = document.createElement('button');
   card.type = 'button';
@@ -96,9 +128,10 @@ function createModelCard(model: PresetModel, onSelect: (model: PresetModel) => v
 
   const label = document.createElement('span');
   label.textContent = modelLabel(model);
-  label.style.cssText = 'font-size:11px;color:#374151;text-align:center;';
+  label.style.cssText = 'font-size:11px;font-weight:700;color:#000;text-align:center;';
   card.appendChild(label);
 
+  disegnaScelta(card, model.id === sceltaId);
   card.addEventListener('click', () => onSelect(model));
   return card;
 }
@@ -128,7 +161,7 @@ function appendGroup(
   groupTitle.setAttribute('data-cabina-model-group', group);
   groupTitle.textContent = heading;
   groupTitle.style.cssText =
-    'margin:8px 0 6px;font-size:12px;font-weight:600;color:#6b7280;text-align:center;';
+    'margin:8px 0 6px;font-size:12px;font-weight:700;color:#000;text-align:center;';
   container.appendChild(groupTitle);
 
   const grid = document.createElement('div');

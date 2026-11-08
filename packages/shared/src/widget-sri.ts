@@ -216,8 +216,8 @@
 // ⚠️ 2026-09-22 — rigenerato per il consenso **v5**: il destinatario di misure,
 // categoria e giudice passa da Novita AI a Vercel AI Gateway (modello OpenAI,
 // host Azure con zero conservazione), perché Novita ritira il modello il 09/10.
-// Cambiano i dizionari (8 lingue) E `CURRENT_PHOTO_CONSENT_VERSION` nel codice.
-export const WIDGET_SRI ='sha384-IqHXakIRRzFJ9tqksBVOItUfHqHv6r1IZnV7kPvslNRFMavvVJunpa5/jgB3OGot';
+// Cambiano i dizionari (7 lingue) E `CURRENT_PHOTO_CONSENT_VERSION` nel codice.
+export const WIDGET_SRI ='sha384-8p8r2dsAitgM5+q6t5fKNJSMVGca9RtY9+5eXp1jrAWG4NxCOC1/jqsY1+chqcZu';
 
 /**
  * URL pubblico del bundle widget. Fonte unica per snippet manuale, ScriptTag
