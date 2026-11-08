@@ -42,7 +42,7 @@ The virtual try-on shows how the garment looks on the shopper; the size recommen
 * **Increase conversion** — Customers who try on virtually buy more
 * **Reduce returns** — Size recommendations cut returns caused by wrong sizes
 * **Nothing for shoppers to install** — The virtual fitting room runs directly in the customer's browser, mobile included
-* **Free plan** — Start free, with no credit card; paid plans for stores that need more try-ons
+* **Free plan** — Start free, with no credit card; then buy extra try-ons when you need them ($0.29 each, at least 18 per purchase, no subscription, they never expire) or choose a monthly plan
 * **7 languages** — The widget speaks Italian, English, French, Spanish, German, Brazilian Portuguese and Indonesian
 * **No external code** — The widget script ships inside the plugin and is served from your own site; the try-on, the widget configuration, its translations and the model photos come from Cabina's API
 * **Privacy and consent** — Nothing leaves the customer's device without explicit, revocable consent. With consent, the photo is sent to external AI providers to estimate measurements and generate the try-on image; the estimated measurements are not stored, and the generated image is kept for at most 7 days
@@ -92,7 +92,7 @@ Yes. Cabina integrates with WooCommerce product page hooks. If WooCommerce is no
 
 = Is the virtual try-on free? =
 
-The plugin is free, and Cabina has a free plan you can start without a credit card. Paid plans, for stores that need more try-ons, are listed at https://cabina.io.
+The plugin is free, and Cabina has a free plan you can start without a credit card. When you need more try-ons, you can buy extra try-ons at $0.29 each (at least 18 per purchase), with no subscription and no expiry, or choose a monthly plan. Prices are listed at https://cabina.io.
 
 = Can I customize the widget's appearance? =
 
