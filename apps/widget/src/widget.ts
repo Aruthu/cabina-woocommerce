@@ -16,7 +16,7 @@ import {
   shouldAttemptGenerative,
   CURRENT_PHOTO_CONSENT_VERSION,
 } from './features/photo-consent/photo-consent-storage';
-import { createFotoScelta, dimenticaModellaScelta, segnaModellaScelta, createModelGallery, createMoreModelsScreen, createAudienceChoiceScreen, resolveModelThumbs, setModelError, fetchModelAsDataUrl } from './features/model-gallery/model-gallery';
+import { createModelGallery, createMoreModelsScreen, createAudienceChoiceScreen, resolveModelThumbs, setModelError, fetchModelAsDataUrl } from './features/model-gallery/model-gallery';
 import { KIDS_MODELS, KIDS_AGE_BANDS, KIDS_GENDER_LABEL_KEYS, type PresetModel } from './features/model-gallery/presets';
 import { createGarmentSelect, resolvePageGarmentParams, type PageGarmentParams } from './features/garment-select/garment-select';
 import { showTryOnOverlay, removeTryOnOverlay, updateSizeBadge, setShowSizeScore } from './features/tryon/tryon-overlay';
@@ -91,19 +91,12 @@ let modelSelectionInFlight = false;
  */
 export const CATEGORIE_CON_AVVISO: readonly GarmentCategory[] = ['accessory'];
 
-/** Imposta il logo del merchant — solo per Vitest. Non chiamare in produzione. */
-export function __setLogoUrlForTesting(url: string | null): void {
-  currentLogoUrl = url;
-}
-
 /** Reset stato inizializzazione — solo per Vitest. Non chiamare in produzione. */
 export function __resetWidgetForTesting(): void {
   initStarted = false;
-  currentLogoUrl = null;
   currentSessionId = null;
   sessionCompleteSent = false;
   sessionStarted = false;
-  dimenticaModellaScelta();
   widgetContext = createInitialContext(); // lo stato del reducer non deve trapelare tra i test
   osservatoreBottone?.disconnect();
   osservatoreBottone = null;
@@ -113,7 +106,6 @@ export function __resetWidgetForTesting(): void {
   garmentAnalysis = null;
   garmentAnalysisDone = Promise.resolve();
   garmentAnalysisPending = false;
-  analisiCapoDaAvviare = null;
   sizeTables = undefined;
   sizeTablesDone = Promise.resolve();
   rispostaPerChi = undefined;
@@ -156,11 +148,6 @@ let garmentAnalysis: GarmentAnalysis | null = null; // Analisi capo in backgroun
 // analisi in corso (widget non inizializzato, o pagina senza immagine prodotto).
 let garmentAnalysisDone: Promise<void> = Promise.resolve();
 let garmentAnalysisPending = false;
-// 2026-10-24 — l'analisi parte al primo click sul pulsante, non al caricamento:
-// è una chiamata a pagamento al modello di visione, e partiva a ogni visita della
-// pagina prodotto (valetta.fr: decine al giorno, sei aperture). Qui chiave e URL
-// dell'API fino a quel click; `null` = già partita o niente da analizzare.
-let analisiCapoDaAvviare: { apiKey: string; baseUrl: string } | null = null;
 // Le tabelle taglie del merchant, chieste all'avvio come l'analisi del capo
 // (12/10/2026): lo step `photo` deve sapere PRIMA di disegnarsi se il capo è da
 // bambino, perché in quel caso non mostra il caricamento foto. `undefined` =
@@ -379,10 +366,23 @@ function ensureWidgetModal(onClose?: () => void): HTMLElement {
     ].join(';');
   }
 
-  // Il logo del merchant NON si mette qui: ogni schermata fa
-  // `content.innerHTML = ''` subito dopo e lo cancellerebbe (fino al
-  // 07/11/2026 è andata così: nessun cliente l'ha mai visto). Lo rimette
-  // `restoreDragHandle`, insieme alla maniglia, ad ogni svuotamento.
+  // Logo brand del merchant (opzionale) — in cima al contenuto del modal.
+  const logo = sanitizeLogoUrl(currentLogoUrl);
+  if (logo) {
+    const logoImg = document.createElement('img');
+    logoImg.setAttribute('data-cabina-logo', '');
+    logoImg.src = logo;
+    logoImg.alt = '';
+    logoImg.style.cssText = [
+      'display:block',
+      'max-height:36px',
+      'max-width:160px',
+      'width:auto',
+      'object-fit:contain',
+      mobile ? 'margin:0 auto 16px' : 'margin:0 0 16px',
+    ].join(';');
+    container.appendChild(logoImg);
+  }
 
   overlay.appendChild(container);
   document.body.appendChild(overlay);
@@ -401,30 +401,8 @@ function removeWidgetModal(): void {
   }
 }
 
-/**
- * Rimette in cima al contenuto appena svuotato ciò che ogni schermata deve
- * avere: la maniglia del pannello (solo telefono) e il logo del merchant
- * (se configurato). Va chiamata subito dopo ogni `content.innerHTML = ''`.
- */
-export function restoreDragHandle(content: Element): void {
-  const mobile = isMobileViewport();
-  const logo = sanitizeLogoUrl(currentLogoUrl);
-  if (logo) {
-    const logoImg = document.createElement('img');
-    logoImg.setAttribute('data-cabina-logo', '');
-    logoImg.src = logo;
-    logoImg.alt = '';
-    logoImg.style.cssText = [
-      'display:block',
-      'max-height:36px',
-      'max-width:160px',
-      'width:auto',
-      'object-fit:contain',
-      mobile ? 'margin:0 auto 16px' : 'margin:0 0 16px',
-    ].join(';');
-    content.insertBefore(logoImg, content.firstChild);
-  }
-  if (!mobile) return;
+function restoreDragHandle(content: Element): void {
+  if (!isMobileViewport()) return;
   const handle = document.createElement('div');
   handle.setAttribute('data-cabina-sheet-handle', '');
   handle.style.cssText = 'width:40px;height:4px;background:#e0e0e0;border-radius:2px;margin:12px auto 16px';
@@ -470,9 +448,8 @@ export function renderRenderErrorBanner(content: Element, error: string | null):
 /**
  * Story 12.5 (Task 2.1): bottone "← Indietro" condiviso da `form` e
  * `garment_select` (pattern `restoreDragHandle` — helper di rendering
- * riusato, non un componente separato). Inserito subito dopo il logo del
- * merchant o il drag handle mobile (se presenti), altrimenti come primo
- * figlio del contenuto.
+ * riusato, non un componente separato). Inserito subito dopo il drag
+ * handle mobile (se presente), altrimenti come primo figlio del contenuto.
  * Il click ferma la propagazione: un tap sul bottone non deve attivare
  * lo swipe-down-to-close del modal mobile (Task 3.2).
  */
@@ -504,9 +481,9 @@ export function renderBackButton(content: Element, onBack: () => void): void {
   button.addEventListener('touchstart', (e) => e.stopPropagation(), { passive: true });
   button.addEventListener('touchend', (e) => e.stopPropagation(), { passive: true });
 
-  const sopra = content.querySelector('[data-cabina-logo]') ?? content.querySelector('[data-cabina-sheet-handle]');
-  if (sopra) {
-    sopra.insertAdjacentElement('afterend', button);
+  const handle = content.querySelector('[data-cabina-sheet-handle]');
+  if (handle) {
+    handle.insertAdjacentElement('afterend', button);
   } else {
     content.insertBefore(button, content.firstChild);
   }
@@ -604,7 +581,6 @@ function renderState(button: HTMLElement): void {
         },
         {
           onPhotoReady: (dataUrl: string) => {
-            segnaModellaScelta(content, null);
             widgetContext = widgetReducer(widgetContext, { type: 'PHOTO_UPLOADED', dataUrl });
             renderState(button);
           },
@@ -655,7 +631,7 @@ function renderState(button: HTMLElement): void {
       if (MODEL_GALLERY_ENABLED) {
         const orLabel = document.createElement('p');
         orLabel.textContent = getLocaleString('model_gallery.or_label');
-        orLabel.style.cssText = 'text-align:center;color:#000;font-size:12px;font-weight:700;margin:16px 0 8px;text-transform:uppercase;letter-spacing:0.05em;';
+        orLabel.style.cssText = 'text-align:center;color:#9ca3af;font-size:12px;margin:16px 0 8px;text-transform:uppercase;letter-spacing:0.05em;';
         content.appendChild(orLabel);
 
         // Una sola funzione per le tre schermate della galleria (vedi `selezionaModella`).
@@ -723,8 +699,6 @@ function renderState(button: HTMLElement): void {
       // che resta addosso a chi passa di qui). Le stima l'AI dalla foto a ogni
       // prova, quindi non c'era granché da ricordare.
       const prefillMeasures = widgetContext.measures;
-
-      if (widgetContext.photoData) content.appendChild(createFotoScelta(widgetContext.photoData));
 
       const form = createMeasuresForm(
         {
@@ -1210,7 +1184,6 @@ function renderState(button: HTMLElement): void {
       // Preserva baseUrl attraverso il reset (l'apiKey sopravvive già via
       // currentApiKey). Vedi resetSessionContext per il perché.
       widgetContext = resetSessionContext(widgetContext);
-      dimenticaModellaScelta();
       break;
 
     default:
@@ -1350,7 +1323,6 @@ function injectButton(config: WidgetPublicConfig): void {
           currentSessionId = r.sessionId ?? null;
         }).catch(() => {});
       }
-      avviaAnalisiCapo();
       rispostaPerChi = undefined;
       widgetContext = widgetReducer(widgetContext, { type: 'OPEN' });
       renderState(button);
@@ -1577,10 +1549,7 @@ async function selezionaModella(model: PresetModel, overlay: HTMLElement, button
   const baseUrl = widgetContext.baseUrl ?? '';
   const modalContent = overlay.querySelector('[data-cabina-modal-content]');
   // Reset di un eventuale errore precedente prima del nuovo tentativo (P7).
-  if (modalContent) {
-    setModelError(modalContent, '');
-    segnaModellaScelta(modalContent, model.id);
-  }
+  if (modalContent) setModelError(modalContent, '');
   try {
     // Normalizzata come una foto caricata: gli asset preset sono già
     // leggeri, ma così il formato a valle è davvero uno solo — è ciò
@@ -1599,10 +1568,7 @@ async function selezionaModella(model: PresetModel, overlay: HTMLElement, button
     // resta sullo step 'photo' (l'acquirente può riprovare o usare la foto).
     console.warn('[widget] Failed to load preset model', model.assetPath, e);
     const errTarget = overlay.querySelector('[data-cabina-modal-content]');
-    if (errTarget) {
-      setModelError(errTarget, getLocaleString('model_gallery.load_error'));
-      segnaModellaScelta(errTarget, null);
-    }
+    if (errTarget) setModelError(errTarget, getLocaleString('model_gallery.load_error'));
   } finally {
     modelSelectionInFlight = false;
   }
@@ -1619,17 +1585,11 @@ function startGarmentAnalysis(apiKey: string, baseUrl: string): void {
   // l'apertura della pagina. Senza attesa, perché serve solo al click.
   void caricaImmaginiVarianti();
   garmentAnalysis = null;
-  garmentAnalysisDone = Promise.resolve();
-  analisiCapoDaAvviare = { apiKey, baseUrl };
-}
-
-/** Al primo click sul pulsante: l'analisi del capo, una volta per pagina. */
-function avviaAnalisiCapo(): void {
-  if (!analisiCapoDaAvviare) return;
-  const { apiKey, baseUrl } = analisiCapoDaAvviare;
-  analisiCapoDaAvviare = null;
   const productUrl = extractProductImageUrl();
-  if (!productUrl) return;
+  if (!productUrl) {
+    garmentAnalysisDone = Promise.resolve();
+    return;
+  }
   garmentAnalysisPending = true;
   garmentAnalysisDone = analyzeGarmentFromUrl(apiKey, productUrl, baseUrl)
     .then((result) => { garmentAnalysis = result; })

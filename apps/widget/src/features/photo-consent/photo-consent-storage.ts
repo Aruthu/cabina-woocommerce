@@ -22,7 +22,7 @@ const STORAGE_PREFIX = 'cabina_photo_consent_';
  * Azure (`gatewayBody` in `apps/dashboard/src/lib/vision-fetch.ts`). Chi aveva
  * dato la v4 ha autorizzato Novita, non Vercel/Azure: stesso caso della v2,
  * un destinatario nuovo si autorizza di nuovo. Il testo nomina il gateway e
- * l'host, in sette lingue; `JUDGE_MIN_CONSENT_VERSION` sale insieme.
+ * l'host, in otto lingue; `JUDGE_MIN_CONSENT_VERSION` sale insieme.
  *
  * ⚠️ 2026-08-22 — **4: Novita riceve anche il RISULTATO, per un secondo scopo.**
  * Dopo la generazione un giudice vision confronta la foto del capo con

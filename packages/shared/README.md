@@ -20,7 +20,7 @@ Codici disponibili: `INVALID_API_KEY`, `RATE_LIMIT_EXCEEDED`, `UNAUTHORIZED`, `I
 
 ```typescript
 import {
-  MerchantPlan,          // 'freemium' | 'starter' | 'growth'
+  MerchantPlan,          // 'freemium' | 'starter' | 'growth' | 'pro'
   SubscriptionStatus,    // 'active' | 'past_due' | 'grace' | 'canceled'
   SupportedLanguage,     // 'it' | 'en' | 'fr' | 'es' | 'de'
   PLAN_SESSION_LIMITS,    // { freemium: 50, starter: 500, growth: 2000, pro: 4000 }

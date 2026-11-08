@@ -217,7 +217,7 @@ export function createPhotoCapture(
   const uploadBtn = document.createElement('button');
   uploadBtn.textContent = strings.uploadButton;
   uploadBtn.setAttribute('data-cabina-upload-btn', '');
-  uploadBtn.style.cssText = `${buttonStyle()};font-weight:700;color:#000`;
+  uploadBtn.style.cssText = buttonStyle();
   uploadBtn.addEventListener('click', () => {
     if (!consentCheckbox.checked) return;
     fileInput.click();
@@ -235,8 +235,7 @@ export function createPhotoCapture(
   function applyConsentState(): void {
     const given = consentCheckbox.checked;
     uploadBtn.disabled = !given;
-    // Testo nero anche da spento (Arou, 04/11): lo stato lo dicono il cursore e l'avviso arancione.
-    uploadBtn.style.cursor = given ? 'pointer' : 'not-allowed';
+    uploadBtn.style.opacity = given ? '1' : '0.5';
     consentHint.textContent = given ? '' : strings.consentRequired;
   }
   applyConsentState();
