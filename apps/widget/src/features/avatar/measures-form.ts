@@ -240,7 +240,8 @@ export function createMeasuresForm(
     // Label
     const label = document.createElement('label');
     label.textContent = labelStr;
-    label.style.cssText = 'display:block;font-size:14px;font-weight:500;color:#374151;margin-bottom:4px;';
+    // text-align: il tema Classic di PrestaShop 8 ha `label{text-align:right}` globale.
+    label.style.cssText = 'display:block;font-size:14px;font-weight:500;color:#374151;margin-bottom:4px;text-align:start;';
     wrapper.appendChild(label);
 
     // Etichetta "Stimato automaticamente"

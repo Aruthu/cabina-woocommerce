@@ -3574,7 +3574,7 @@
   ZodPromise.create;
   ZodOptional.create;
   ZodNullable.create;
-  const SUPPORTED_LANGUAGES = ["it", "en", "fr", "es", "de", "ja", "pt-BR", "id"];
+  const SUPPORTED_LANGUAGES = ["it", "en", "fr", "es", "de", "pt-BR", "id"];
   const WIDGET_LANGUAGES = SUPPORTED_LANGUAGES;
   objectType({
     heightCm: numberType().min(100).max(220),
@@ -4463,12 +4463,56 @@
     return bottone;
   }
   function extractProductImageUrl() {
+    if (paginaScarti !== null && paginaScarti !== percorso()) resetFotoScartate();
+    if (galleriaRifiutata) return null;
+    const principale = fotoPrincipale();
+    if (!fotoScartate.size || principale && !scartata(principale)) return principale;
+    const og = document.querySelector('meta[property="og:image"]')?.content;
+    for (const img of document.querySelectorAll(GALLERIA)) {
+      if (!img.src || isPlaceholderOrIcon(img.src)) continue;
+      const url = resolveUrl(fotoPsGrande(piuGrandeDelloSrcset(img) ?? img.src, og));
+      if (url && !scartata(url)) return url;
+    }
+    return null;
+  }
+  const fotoScartate = /* @__PURE__ */ new Set();
+  const chiave = (url) => url.split("?")[0];
+  const scartata = (url) => fotoScartate.has(chiave(url));
+  let paginaScarti = null;
+  const percorso = () => String(window.location.pathname);
+  function scartaFotoCapo(url) {
+    fotoScartate.add(chiave(url));
+    paginaScarti = percorso();
+  }
+  let galleriaRifiutata = false;
+  function rifiutaFotoCapo() {
+    galleriaRifiutata = true;
+    paginaScarti = percorso();
+  }
+  function resetFotoScartate() {
+    fotoScartate.clear();
+    galleriaRifiutata = false;
+    paginaScarti = null;
+  }
+  const GALLERIA = [
+    '[data-hook="ProductImageDataHook.ProductImage"] img',
+    // Wix: il carosello principale (non i prodotti correlati)
+    ".js-images-container img",
+    // PrestaShop: copertina, slide e miniature
+    ...PRODUCT_IMAGE_SELECTORS
+  ].join(", ");
+  function fotoPrincipale() {
     const variante = immagineVarianteScelta();
     if (variante) {
       const url = resolveUrl(variante);
       if (url) return url;
     }
     const ogImage = document.querySelector('meta[property="og:image"]');
+    const mostrata = document.querySelector(FOTO_MOSTRATA);
+    if (mostrata?.src && !isPlaceholderOrIcon(mostrata.src)) {
+      const url = resolveUrl(fotoPsGrande(piuGrandeDelloSrcset(mostrata) ?? mostrata.src, ogImage?.content));
+      if (url) return url;
+    }
     if (ogImage?.content) {
       const url = resolveUrl(ogImage.content);
       if (url) return url;
@@ -4482,13 +4526,33 @@
       try {
         const img = document.querySelector(selector);
         if (img?.src && !isPlaceholderOrIcon(img.src)) {
-          const url = resolveUrl(img.src);
+          const url = resolveUrl(piuGrandeDelloSrcset(img) ?? img.src);
           if (url) return url;
         }
       } catch {
       }
     }
     return null;
+  }
+  const FOTO_MOSTRATA = [
+    ".js-images-container .carousel-item.active img",
+    ".js-images-container .js-qv-product-cover",
+    ".woocommerce-product-gallery__image img"
+  ].join(", ");
+  function fotoPsGrande(mostrata, og) {
+    if (!window.prestashop) return mostrata;
+    const id = /\/(\d+)-[-\w]+\/[^/]+$/.exec(mostrata)?.[1];
+    if (!id || !og || !/\/\d+-[-\w]+\/[^/]+$/.test(og)) return mostrata;
+    return og.replace(/\/\d+-([-\w]+\/[^/]+)$/, `/${id}-$1`);
+  }
+  function piuGrandeDelloSrcset(img) {
+    const voci = [];
+    for (const m of (img.getAttribute("srcset") ?? "").matchAll(/\s*,?\s*(\S+?)\s+(\d+(?:\.\d+)?)([wx])\s*(?=,|$)/g)) {
+      voci.push({ url: m[1].replace(/^,+/, ""), n: parseFloat(m[2]), tipo: m[3] });
+    }
+    if (voci.length === 0) return null;
+    const tipo = voci.some((v) => v.tipo === "w") ? "w" : "x";
+    return voci.filter((v) => v.tipo === tipo).sort((a, b) => b.n - a.n)[0].url;
   }
   function isPlaceholderOrIcon(src) {
     const lower = src.toLowerCase();
@@ -4497,15 +4561,22 @@
   function resolveUrl(url) {
     try {
       if (url.startsWith("http://") || url.startsWith("https://")) {
-        return toHttps(new URL(url).href);
+        return fotoWixGrande(toHttps(new URL(url).href));
       }
       if (url.startsWith("//")) {
-        return new URL(`https:${url}`).href;
+        return fotoWixGrande(new URL(`https:${url}`).href);
       }
       return toHttps(new URL(url, window.location.href).href);
     } catch {
       return null;
     }
+  }
+  const FOTO_WIX = /^https:\/\/static\.wixstatic\.com\/media\/([^/]+\.(jpe?g|png|webp))(?:\/v1\/.*)?$/i;
+  function fotoWixGrande(url) {
+    const m = FOTO_WIX.exec(url);
+    if (!m) return url;
+    const formato = m[2].toLowerCase() === "jpeg" ? "jpg" : m[2].toLowerCase();
+    return `https://static.wixstatic.com/media/${m[1]}/v1/fit/w_2048,h_2048,q_90/file.${formato}`;
   }
   function toHttps(url) {
     return url.startsWith("http://") ? `https://${url.slice("http://".length)}` : url;
@@ -4514,10 +4585,10 @@
   async function caricaImmaginiVarianti() {
     immaginiVarianti = null;
     if (!window.Shopify) return;
-    const percorso = window.location.pathname.replace(/\/+$/, "");
-    if (!/\/products\/[^/]+$/.test(percorso)) return;
+    const percorso2 = window.location.pathname.replace(/\/+$/, "");
+    if (!/\/products\/[^/]+$/.test(percorso2)) return;
     try {
-      const res = await fetch(`${percorso}.js`, { credentials: "same-origin", headers: { Accept: "application/json" } });
+      const res = await fetch(`${percorso2}.js`, { credentials: "same-origin", headers: { Accept: "application/json" } });
       if (!res.ok) return;
       const prodotto = await res.json();
       const mappa = /* @__PURE__ */ new Map();
@@ -4715,6 +4786,8 @@
       "align-items:flex-start",
       "gap:8px",
       "margin-bottom:12px",
+      "text-align:start",
+      // PrestaShop Classic: `label{text-align:right}` globale
       "font-size:12px",
       "line-height:1.45",
       "color:#4b5563",
@@ -4741,7 +4814,7 @@
     const uploadBtn = document.createElement("button");
     uploadBtn.textContent = strings.uploadButton;
     uploadBtn.setAttribute("data-cabina-upload-btn", "");
-    uploadBtn.style.cssText = buttonStyle$1();
+    uploadBtn.style.cssText = `${buttonStyle$1()};font-weight:700;color:#000`;
     uploadBtn.addEventListener("click", () => {
       if (!consentCheckbox.checked) return;
       fileInput.click();
@@ -4753,7 +4826,7 @@
     function applyConsentState() {
       const given = consentCheckbox.checked;
       uploadBtn.disabled = !given;
-      uploadBtn.style.opacity = given ? "1" : "0.5";
+      uploadBtn.style.cursor = given ? "pointer" : "not-allowed";
       consentHint.textContent = given ? "" : strings.consentRequired;
     }
     applyConsentState();
@@ -5031,7 +5104,7 @@
       wrapper.style.cssText = "margin-bottom:12px;";
       const label = document.createElement("label");
       label.textContent = labelStr;
-      label.style.cssText = "display:block;font-size:14px;font-weight:500;color:#374151;margin-bottom:4px;";
+      label.style.cssText = "display:block;font-size:14px;font-weight:500;color:#374151;margin-bottom:4px;text-align:start;";
       wrapper.appendChild(label);
       const autoLabel = document.createElement("span");
       autoLabel.setAttribute("data-cabina-auto-label", "");
@@ -5524,6 +5597,28 @@
     const band = model.ageBand ? ` ${ageBandLabel(model.ageBand)}` : "";
     return `${getLocaleString(GENDER_LABEL_KEYS[model.gender])}${band} ${modelLabel(model)}`;
   }
+  let sceltaId = null;
+  function disegnaScelta(card, scelta) {
+    card.style.boxShadow = scelta ? "0 0 0 2px #000" : "none";
+    card.setAttribute("aria-pressed", String(scelta));
+  }
+  function segnaModellaScelta(container, id) {
+    sceltaId = id;
+    container.querySelectorAll("[data-cabina-model-card]").forEach((card) => {
+      disegnaScelta(card, card.getAttribute("data-cabina-model-card") === id);
+    });
+  }
+  function dimenticaModellaScelta() {
+    sceltaId = null;
+  }
+  function createFotoScelta(src) {
+    const img = document.createElement("img");
+    img.src = src;
+    img.alt = "";
+    img.setAttribute("data-cabina-foto-scelta", "");
+    img.style.cssText = "display:block;height:120px;max-width:100%;object-fit:contain;margin:0 auto 12px;border-radius:8px;";
+    return img;
+  }
   function createModelCard(model, onSelect) {
     const card = document.createElement("button");
     card.type = "button";
@@ -5552,8 +5647,9 @@
     card.appendChild(thumb);
     const label = document.createElement("span");
     label.textContent = modelLabel(model);
-    label.style.cssText = "font-size:11px;color:#374151;text-align:center;";
+    label.style.cssText = "font-size:11px;font-weight:700;color:#000;text-align:center;";
     card.appendChild(label);
+    disegnaScelta(card, model.id === sceltaId);
     card.addEventListener("click", () => onSelect(model));
     return card;
   }
@@ -5571,7 +5667,7 @@
     const groupTitle = document.createElement("h4");
     groupTitle.setAttribute("data-cabina-model-group", group);
     groupTitle.textContent = heading;
-    groupTitle.style.cssText = "margin:8px 0 6px;font-size:12px;font-weight:600;color:#6b7280;text-align:center;";
+    groupTitle.style.cssText = "margin:8px 0 6px;font-size:12px;font-weight:700;color:#000;text-align:center;";
     container.appendChild(groupTitle);
     const grid = document.createElement("div");
     grid.setAttribute("data-cabina-model-grid", group);
@@ -5808,8 +5904,13 @@
       } catch {
       }
       setDefaultBtnBusy(false);
+      const foto = callbacks.getProductImageUrl();
+      if (!foto) {
+        console.warn("[cabina] Nessuna foto del capo intero: le foto della pagina mostrano il capo piegato.");
+        return;
+      }
       callbacks.onGarmentsConfirmed([{
-        imageUrl: url,
+        imageUrl: foto,
         category: params.category,
         removeExisting: params.removeExisting,
         garmentPhotoType: "auto"
@@ -6479,13 +6580,13 @@
     hint.textContent = `↔  ${getLocaleStringOr("reveal_result.drag_hint", "reveal_result.slider_label")}`;
     hint.style.cssText = [
       "position:absolute",
-      "left:16px",
-      "bottom:16px",
+      `left:${INITIAL_CLIP_PERCENT}%`,
+      "bottom:calc(50% + 36px)",
       "max-width:calc(100% - 32px)",
       "overflow:hidden",
       "text-overflow:ellipsis",
-      "transform:scale(calc(1 / var(--cabina-zoom, 1)))",
-      "transform-origin:bottom left",
+      "transform:translateX(-50%) scale(calc(1 / var(--cabina-zoom, 1)))",
+      "transform-origin:bottom center",
       "padding:6px 12px",
       "border-radius:999px",
       "background:rgba(0,0,0,0.6)",
@@ -6514,12 +6615,16 @@
       corrente = clamped;
       generatedImg.style.clipPath = buildClipPath(clamped);
       handle.style.left = `${clamped}%`;
+      hint.style.left = `${clamped}%`;
       handle.setAttribute("aria-valuenow", String(Math.round(clamped)));
       callbacks.onClipChange?.(clamped);
     }
     function onPointerMove(e) {
       if (!isDragging) return;
-      if (Math.abs(e.clientX - pressioneX) > DRAG_THRESHOLD) haTrascinato = true;
+      if (Math.abs(e.clientX - pressioneX) > DRAG_THRESHOLD) {
+        haTrascinato = true;
+        hint.remove();
+      }
       const rect = container.getBoundingClientRect();
       const percent = computeClipPercent(rect, e.clientX);
       applyClip(percent);
@@ -6535,9 +6640,11 @@
       document.removeEventListener("pointerup", endDrag);
       document.removeEventListener("pointercancel", endDrag);
     }
-    handle.addEventListener("pointerdown", (e) => {
+    container.addEventListener("pointerdown", (e) => {
       if (isDragging) return;
+      if ((parseFloat(getComputedStyle(container).getPropertyValue("--cabina-zoom")) || 1) > 1.01) return;
       e.preventDefault();
+      if (handle.contains(e.target)) hint.remove();
       isDragging = true;
       haTrascinato = false;
       pressioneX = e.clientX;
@@ -6549,14 +6656,12 @@
       document.addEventListener("pointermove", onPointerMove);
       document.addEventListener("pointerup", endDrag);
       document.addEventListener("pointercancel", endDrag);
-      const rect = container.getBoundingClientRect();
-      const percent = computeClipPercent(rect, e.clientX);
-      applyClip(percent);
     });
     let ultimoClick = { t: 0, x: 0, y: 0 };
     let primaDelClick = INITIAL_CLIP_PERCENT;
     container.addEventListener("click", (e) => {
       if (isDragging) return;
+      hint.remove();
       if (haTrascinato) {
         haTrascinato = false;
         return;
@@ -6574,6 +6679,7 @@
       applyClip(percent);
     });
     handle.addEventListener("keydown", (e) => {
+      if (e.key === "ArrowLeft" || e.key === "ArrowRight") hint.remove();
       const current = Number(handle.getAttribute("aria-valuenow") ?? INITIAL_CLIP_PERCENT);
       if (e.key === "ArrowLeft") {
         e.preventDefault();
@@ -6885,6 +6991,7 @@
   let bottomBarElement = null;
   let barraObserver = null;
   const SPAZIO_BARRA = 10;
+  const TELEFONO = "(max-width: 640px)";
   let showSizeScore = false;
   function setShowSizeScore(value) {
     showSizeScore = value;
@@ -7067,7 +7174,17 @@
     const inline = isInline(overlay);
     const themeHost = inline ? document.querySelector(`[${SIZE_HOST_ATTR}]`) ?? creaSizeHostSottoIlPulsante() : null;
     const imageContainer = imageContainerRef ?? overlay.querySelector("[data-cabina-tryon-image-container]");
-    const badge = buildSizeBadge(recommendation, themeHost != null);
+    const sottoFoto = !inline && !!window.matchMedia?.(TELEFONO).matches;
+    const badge = buildSizeBadge(recommendation, themeHost != null || sottoFoto);
+    if (sottoFoto) {
+      badge.style.flex = "none";
+      badge.style.order = "1";
+      if (imageContainer?.offsetWidth) badge.style.width = `${imageContainer.offsetWidth}px`;
+      overlay.appendChild(badge);
+      barraObserver?.observe(badge);
+      sizeBadgeElement = badge;
+      return badge;
+    }
     const barra = themeHost?.querySelector("[data-cabina-tryon-bottom-bar]") ?? null;
     (themeHost ?? imageContainer ?? overlay).insertBefore(badge, barra);
     sizeBadgeElement = badge;
@@ -7088,6 +7205,11 @@
     const overlay = document.createElement("div");
     overlay.setAttribute("data-cabina-tryon", "");
     if (inline) overlay.setAttribute("data-cabina-tryon-inline", "");
+    if (inline) {
+      for (const tipo of ["pointerdown", "mousedown", "touchstart", "click", "dblclick"]) {
+        overlay.addEventListener(tipo, (e) => e.stopPropagation());
+      }
+    }
     overlay.style.cssText = [
       // Inline: riempie il riquadro del tema, che è `position:relative` e porta
       // già le proporzioni giuste (il tema le fissa da `--cabina-stage-ratio`).
@@ -7153,7 +7275,8 @@
       bottomBar = document.createElement("div");
       bottomBar.setAttribute("data-cabina-tryon-bottom-bar", "");
       bottomBar.style.cssText = [
-        ...inline ? ["width:100%"] : ["flex:none", "box-sizing:border-box"],
+        // `order:2`: sotto il badge quando sta sotto la foto (`mountSizeBadge`).
+        ...inline ? ["width:100%"] : ["flex:none", "box-sizing:border-box", "order:2"],
         "display:flex",
         "flex-direction:column",
         "gap:8px",
@@ -7528,21 +7651,25 @@
       const slot = inline ? document.querySelector(`[${SIZE_HOST_ATTR}]`) ?? creaSizeHostSottoIlPulsante() : null;
       (slot ?? overlay).appendChild(bottomBar);
       bottomBarElement = bottomBar;
-      if (!inline && typeof ResizeObserver !== "undefined") {
-        const barra = bottomBar;
-        barraObserver = new ResizeObserver(() => {
-          const maxH = Math.max(120, overlay.clientHeight * 0.9 - barra.offsetHeight - SPAZIO_BARRA);
-          overlay.querySelectorAll(
-            "[data-cabina-tryon-image-container],[data-cabina-tryon-sizer],[data-cabina-tryon-image]"
-          ).forEach((el) => {
-            el.style.maxHeight = `${maxH}px`;
-          });
-          if (imageContainer.offsetWidth) barra.style.width = `${imageContainer.offsetWidth}px`;
+    }
+    if (!inline && typeof ResizeObserver !== "undefined") {
+      const barra = bottomBar;
+      const sotto = () => [barra, sizeBadgeElement].filter((el) => el?.parentElement === overlay);
+      barraObserver = new ResizeObserver(() => {
+        const occupato = sotto().reduce((h, el) => h + el.offsetHeight + SPAZIO_BARRA, 0);
+        const maxH = Math.max(120, overlay.clientHeight * 0.9 - occupato);
+        overlay.querySelectorAll(
+          "[data-cabina-tryon-image-container],[data-cabina-tryon-sizer],[data-cabina-tryon-image]"
+        ).forEach((el) => {
+          el.style.maxHeight = `${maxH}px`;
         });
-        barraObserver.observe(overlay);
-        barraObserver.observe(bottomBar);
-        barraObserver.observe(imageContainer);
-      }
+        if (imageContainer.offsetWidth) {
+          for (const el of sotto()) el.style.width = `${imageContainer.offsetWidth}px`;
+        }
+      });
+      barraObserver.observe(overlay);
+      barraObserver.observe(imageContainer);
+      for (const el of sotto()) barraObserver.observe(el);
     }
     if (!document.getElementById("cabina-tryon-styles")) {
       const style = document.createElement("style");
@@ -7753,7 +7880,7 @@
       return comfortSize ? { ...base, comfortSize } : base;
     }
     if (fit === "regular") return base;
-    const chiave = dimensioniChiave(options?.garment?.category);
+    const chiave2 = dimensioniChiave(options?.garment?.category);
     const rigaDi = (size) => sizeTable.find((r) => r.size === size);
     if (base.confidence === "between" && base.alternative) {
       const [a, b] = [rigaDi(base.size), rigaDi(base.alternative)];
@@ -7762,7 +7889,7 @@
       if (fit === "relaxed") {
         return { ...base, size: maggiore.size, alternative: minore2.size };
       }
-      const entraNellaMinore = chiave.every((d) => {
+      const entraNellaMinore = chiave2.every((d) => {
         const r = rangeDi(measures, minore2, d);
         return !r || r.v <= r.max + FIT_MARGIN_CM;
       });
@@ -7770,7 +7897,7 @@
     }
     const attuale = rigaDi(base.size);
     if (!attuale) return base;
-    const range = chiave.map((d) => rangeDi(measures, attuale, d)).filter((r) => r != null);
+    const range = chiave2.map((d) => rangeDi(measures, attuale, d)).filter((r) => r != null);
     if (range.length === 0) return base;
     if (fit === "relaxed") {
       const maggiore = riga(sizeTable, base.size, 1);
@@ -7867,7 +7994,7 @@
     const tutte = pickSizeTables(tables, options?.garment?.category ?? null);
     const delPubblico = options?.perChi ? tutte.filter((t) => t.audience === "kids" === (options.perChi === "kids")) : tutte;
     const candidate = delPubblico.length > 0 ? delPubblico : tutte;
-    const chiave = dimensioniChiave(options?.garment?.category);
+    const chiave2 = dimensioniChiave(options?.garment?.category);
     const piene = {
       heightCm: measures.heightCm ?? 0,
       bustCm: measures.bustCm ?? 0,
@@ -7877,7 +8004,7 @@
     };
     let migliore = null;
     for (const table of candidate) {
-      const data = soloMisureDate(table.data, measures, chiave);
+      const data = soloMisureDate(table.data, measures, chiave2);
       if (!data) continue;
       const recommendation = consiglioBase(piene, data, options);
       if (!recommendation) continue;
@@ -7894,11 +8021,11 @@
       candidates: candidate.length
     };
   }
-  function soloMisureDate(rows, measures, chiave) {
+  function soloMisureDate(rows, measures, chiave2) {
     const dichiarata = (d) => rows.some((r) => !isRangeUnspecified(r[COLONNE[d][0]] ?? 0, r[COLONNE[d][1]] ?? 0));
     const dichiarate = ["height", "bust", "waist", "hips", "foot"].filter(dichiarata);
     const assenti = dichiarate.filter((d) => measures[MISURA[d]] == null);
-    if (assenti.length === dichiarate.length || assenti.some((d) => chiave.includes(d))) return null;
+    if (assenti.length === dichiarate.length || assenti.some((d) => chiave2.includes(d))) return null;
     if (assenti.length === 0) return rows;
     return rows.map((r) => {
       const ridotta = { ...r };
@@ -7947,6 +8074,28 @@
   function rimettiAttribuzione() {
     if (ultimaSessione) segnaProvaNelForm(ultimaSessione);
   }
+  const CHIAVE_PROVE = "cabina:wix:prove";
+  const VALIDITA_MS = 24 * 60 * 60 * 1e3;
+  function leggi(chiave2, vuoto) {
+    try {
+      const raw = sessionStorage.getItem(chiave2);
+      return raw ? JSON.parse(raw) : vuoto;
+    } catch {
+      return vuoto;
+    }
+  }
+  function scrivi(chiave2, valore) {
+    try {
+      sessionStorage.setItem(chiave2, JSON.stringify(valore));
+    } catch {
+    }
+  }
+  function registraProvaWix(sessionId, pagina, ora = Date.now()) {
+    if (!sessionId || typeof window === "undefined" || !window.__cabinaWix) return;
+    const prove = leggi(CHIAVE_PROVE, []).filter((x) => x.p !== pagina && ora - x.t < VALIDITA_MS);
+    prove.push({ s: sessionId, p: pagina, t: ora });
+    scrivi(CHIAVE_PROVE, prove.slice(-10));
+  }
   function senzaChiave(valore) {
     return valore.startsWith("form.") ? void 0 : valore;
   }
@@ -7969,6 +8118,7 @@
   let garmentAnalysis = null;
   let garmentAnalysisDone = Promise.resolve();
   let garmentAnalysisPending = false;
+  let analisiCapoDaAvviare = null;
   let sizeTables;
   let sizeTablesDone = Promise.resolve();
   let rispostaPerChi;
@@ -8130,22 +8280,6 @@
         "position:relative"
       ].join(";");
     }
-    const logo = sanitizeLogoUrl(currentLogoUrl);
-    if (logo) {
-      const logoImg = document.createElement("img");
-      logoImg.setAttribute("data-cabina-logo", "");
-      logoImg.src = logo;
-      logoImg.alt = "";
-      logoImg.style.cssText = [
-        "display:block",
-        "max-height:36px",
-        "max-width:160px",
-        "width:auto",
-        "object-fit:contain",
-        mobile ? "margin:0 auto 16px" : "margin:0 0 16px"
-      ].join(";");
-      container.appendChild(logoImg);
-    }
     overlay.appendChild(container);
     document.body.appendChild(overlay);
     widgetModal = overlay;
@@ -8162,7 +8296,24 @@
     }
   }
   function restoreDragHandle(content) {
-    if (!isMobileViewport()) return;
+    const mobile = isMobileViewport();
+    const logo = sanitizeLogoUrl(currentLogoUrl);
+    if (logo) {
+      const logoImg = document.createElement("img");
+      logoImg.setAttribute("data-cabina-logo", "");
+      logoImg.src = logo;
+      logoImg.alt = "";
+      logoImg.style.cssText = [
+        "display:block",
+        "max-height:36px",
+        "max-width:160px",
+        "width:auto",
+        "object-fit:contain",
+        mobile ? "margin:0 auto 16px" : "margin:0 0 16px"
+      ].join(";");
+      content.insertBefore(logoImg, content.firstChild);
+    }
+    if (!mobile) return;
     const handle = document.createElement("div");
     handle.setAttribute("data-cabina-sheet-handle", "");
     handle.style.cssText = "width:40px;height:4px;background:#e0e0e0;border-radius:2px;margin:12px auto 16px";
@@ -8177,11 +8328,11 @@
       consent: "rendering.consent_required",
       technical: "rendering.unavailable"
     };
-    const chiave = chiavi[error] ?? "rendering.unavailable";
+    const chiave2 = chiavi[error] ?? "rendering.unavailable";
     const isQuota = error === "quota";
     banner.style.cssText = isQuota ? "color:#92400e;font-size:13px;margin:0 0 12px;padding:8px 12px;background:#fffbeb;border-radius:4px;" : "color:#dc2626;font-size:13px;margin:0 0 12px;padding:8px 12px;background:#fef2f2;border-radius:4px;";
     banner.setAttribute("role", "alert");
-    banner.textContent = getLocaleString(chiave);
+    banner.textContent = getLocaleString(chiave2);
     content.appendChild(banner);
   }
   function renderBackButton(content, onBack) {
@@ -8207,9 +8358,9 @@
     });
     button.addEventListener("touchstart", (e) => e.stopPropagation(), { passive: true });
     button.addEventListener("touchend", (e) => e.stopPropagation(), { passive: true });
-    const handle = content.querySelector("[data-cabina-sheet-handle]");
-    if (handle) {
-      handle.insertAdjacentElement("afterend", button);
+    const sopra = content.querySelector("[data-cabina-logo]") ?? content.querySelector("[data-cabina-sheet-handle]");
+    if (sopra) {
+      sopra.insertAdjacentElement("afterend", button);
     } else {
       content.insertBefore(button, content.firstChild);
     }
@@ -8287,6 +8438,7 @@
           },
           {
             onPhotoReady: (dataUrl) => {
+              segnaModellaScelta(content, null);
               widgetContext = widgetReducer(widgetContext, { type: "PHOTO_UPLOADED", dataUrl });
               renderState(button);
             },
@@ -8323,7 +8475,7 @@
         {
           const orLabel = document.createElement("p");
           orLabel.textContent = getLocaleString("model_gallery.or_label");
-          orLabel.style.cssText = "text-align:center;color:#9ca3af;font-size:12px;margin:16px 0 8px;text-transform:uppercase;letter-spacing:0.05em;";
+          orLabel.style.cssText = "text-align:center;color:#000;font-size:12px;font-weight:700;margin:16px 0 8px;text-transform:uppercase;letter-spacing:0.05em;";
           content.appendChild(orLabel);
           const onModelSelected = (model) => void selezionaModella(model, overlay, button);
           const gallery = createModelGallery(
@@ -8374,6 +8526,7 @@
         });
         renderRenderErrorBanner(content, widgetContext.error);
         const prefillMeasures = widgetContext.measures;
+        if (widgetContext.photoData) content.appendChild(createFotoScelta(widgetContext.photoData));
         const form = createMeasuresForm(
           {
             title: getLocaleString("form.title"),
@@ -8423,7 +8576,8 @@
                   params = await garmentAnalysisDone.then(() => resolvePageGarmentParams(garmentAnalysis));
                 } catch {
                 }
-                garments = [{ imageUrl: url, category: params.category, removeExisting: params.removeExisting, garmentPhotoType: "auto" }];
+                const foto = extractProductImageUrl();
+                if (foto) garments = [{ imageUrl: foto, category: params.category, removeExisting: params.removeExisting, garmentPhotoType: "auto" }];
               }
               if (widgetContext.state !== "form") return;
               widgetContext = widgetReducer(widgetContext, { type: "MEASURES_CONFIRMED", measures, measureSource, fit, garments });
@@ -8634,7 +8788,10 @@
           notifySessionComplete(currentApiKey, widgetContext.baseUrl ?? "", currentSessionId);
         }
         const capoDellaPagina = !widgetContext.selectedGarments || widgetContext.selectedGarments.some((g) => g.imageUrl === extractProductImageUrl());
-        if (capoDellaPagina) segnaProvaNelForm(currentSessionId);
+        if (capoDellaPagina) {
+          segnaProvaNelForm(currentSessionId);
+          registraProvaWix(currentSessionId, location.pathname);
+        }
         const apiKeyForCalc = currentApiKey;
         const baseUrlForCalc = widgetContext.baseUrl ?? "";
         showTryOnOverlay(
@@ -8694,6 +8851,7 @@
         removeWidgetModal();
         removeTryOnOverlay();
         widgetContext = resetSessionContext(widgetContext);
+        dimenticaModellaScelta();
         break;
       default:
         removeWidgetModal();
@@ -8766,6 +8924,7 @@
           }).catch(() => {
           });
         }
+        avviaAnalisiCapo();
         rispostaPerChi = void 0;
         widgetContext = widgetReducer(widgetContext, { type: "OPEN" });
         renderState(button);
@@ -8865,7 +9024,10 @@
     modelSelectionInFlight = true;
     const baseUrl = widgetContext.baseUrl ?? "";
     const modalContent = overlay.querySelector("[data-cabina-modal-content]");
-    if (modalContent) setModelError(modalContent, "");
+    if (modalContent) {
+      setModelError(modalContent, "");
+      segnaModellaScelta(modalContent, model.id);
+    }
     try {
       const dataUrl = await downscalePhotoDataUrl(
         await fetchModelAsDataUrl(baseUrl, model.assetPath)
@@ -8876,7 +9038,10 @@
     } catch (e) {
       console.warn("[widget] Failed to load preset model", model.assetPath, e);
       const errTarget = overlay.querySelector("[data-cabina-modal-content]");
-      if (errTarget) setModelError(errTarget, getLocaleString("model_gallery.load_error"));
+      if (errTarget) {
+        setModelError(errTarget, getLocaleString("model_gallery.load_error"));
+        segnaModellaScelta(errTarget, null);
+      }
     } finally {
       modelSelectionInFlight = false;
     }
@@ -8889,20 +9054,39 @@
       sizeTables = null;
     });
     void caricaImmaginiVarianti();
+    resetFotoScartate();
     garmentAnalysis = null;
-    const productUrl = extractProductImageUrl();
-    if (!productUrl) {
-      garmentAnalysisDone = Promise.resolve();
-      return;
-    }
+    garmentAnalysisDone = Promise.resolve();
+    analisiCapoDaAvviare = { apiKey: apiKey2, baseUrl };
+  }
+  function avviaAnalisiCapo() {
+    if (!analisiCapoDaAvviare) return;
+    const { apiKey: apiKey2, baseUrl } = analisiCapoDaAvviare;
+    analisiCapoDaAvviare = null;
+    if (!extractProductImageUrl()) return;
     garmentAnalysisPending = true;
-    garmentAnalysisDone = analyzeGarmentFromUrl(apiKey2, productUrl, baseUrl).then((result) => {
-      garmentAnalysis = result;
-    }).catch(() => {
+    garmentAnalysisDone = (async () => {
+      for (let i = 0; i < 4; i++) {
+        const url = extractProductImageUrl();
+        if (!url) {
+          garmentAnalysis = null;
+          return;
+        }
+        const result = await analyzeGarmentFromUrl(apiKey2, url, baseUrl);
+        garmentAnalysis = result;
+        if (!capoPiegato(result)) return;
+        scartaFotoCapo(url);
+      }
+      garmentAnalysis = null;
+      rifiutaFotoCapo();
+    })().catch(() => {
       garmentAnalysis = null;
     }).finally(() => {
       garmentAnalysisPending = false;
     });
+  }
+  function capoPiegato(a) {
+    return a?.fullyVisible === false && ["top", "bottom", "dress", "outerwear"].includes(a.category);
   }
   const script = document.currentScript;
   const srcUrl = script?.src ? new URL(script.src) : null;

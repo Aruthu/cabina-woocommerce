@@ -27,7 +27,13 @@ export type ErrorCode =
   // Story 12.7: nessun provider vision ha risposto (timeout/rete/5xx dopo il
   // retry). Distinto da "ha risposto ma non ha riconosciuto misure", che resta
   // `data: {}` — il client li tratta diversamente.
-  | 'VISION_UNAVAILABLE';
+  | 'VISION_UNAVAILABLE'
+  // Story 14.2: la piattaforma non ha concesso il permesso che serve (Read
+  // Orders su Wix: il sito non ha ancora accettato la major version).
+  | 'PERMISSION_MISSING'
+  // Story 14.2: la chiave del merchant non si può rileggere (`api_key_enc`
+  // assente, merchant di prima del 05/09): va rigenerata dal pannello.
+  | 'API_KEY_NOT_RECOVERABLE';
 
 /**
  * Sentinella usata dal widget per riconoscere l'indisponibilità della vision

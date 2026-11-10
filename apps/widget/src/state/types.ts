@@ -14,6 +14,8 @@ export interface GarmentAnalysis {
   category: GarmentCategory;
   confidence: number;
   suggestedAngles: number[];
+  /** false se il capo è piegato o non si vede per intero (10/11/2026). */
+  fullyVisible?: boolean;
 }
 
 /** ⚠️ 2026-08-17 — via `'consent'` e `'photo_consent'`: il consenso è UNA spunta

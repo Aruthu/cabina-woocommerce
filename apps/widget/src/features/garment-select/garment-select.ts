@@ -274,13 +274,20 @@ export function createGarmentSelect(
       // Analisi fallita: resta il default sopra (categoria come prima + rimozione).
     }
     setDefaultBtnBusy(false);
+    // Riletta dopo l'analisi: una foto col capo piegato è stata scartata; nessuna foto intera = niente prova.
+    const foto = callbacks.getProductImageUrl();
+    if (!foto) {
+      // Come il ramo `!url` sopra: un bottone che non reagisce va almeno spiegato (rilievo Kilo #414).
+      console.warn('[cabina] Nessuna foto del capo intero: le foto della pagina mostrano il capo piegato.');
+      return;
+    }
     // ⚠️ Chi decide se questa conferma è ancora valida è `onGarmentsConfirmed`
     // (widget.ts): durante l'attesa l'acquirente può tornare indietro o chiudere.
     // Non lo si può dedurre da qui guardando il DOM — questo step viene rimontato
     // anche quando il catalogo arriva in ritardo, e un bottone staccato non
     // distingue i due casi.
     callbacks.onGarmentsConfirmed([{
-      imageUrl: url,
+      imageUrl: foto,
       category: params.category,
       removeExisting: params.removeExisting,
       garmentPhotoType: 'auto',

@@ -57,7 +57,9 @@ export interface WidgetConfig {
   defaultLanguage: WidgetLanguage;
 }
 
-export type MerchantPlan = 'freemium' | 'starter' | 'growth' | 'pro';
+// 07/11/2026 (Arou): via il Pro (140 $, 800 prove). Sopra Growth c'è il consumo
+// a 0,29 $ e, oltre, l'Enterprise, che è una conversazione e non un piano.
+export type MerchantPlan = 'freemium' | 'starter' | 'growth';
 
 // ─── Studio (Story 11.2+) ──────────────────────────────────────────────────
 
@@ -156,7 +158,15 @@ export function proveAddebitate(capi: number): number {
  * (Il ragionamento non è cambiato, i numeri sì. Un commento che cita cifre morte
  * è come una costante disallineata: qualcuno ci ricalcola sopra.)
  *
- * ⚠️ 2026-08-07 — **questa costante non addebita nulla.** Il checkout legge il
+ * ⭐ 2026-10-26 — **$0,29 IVA INCLUSA, ed è anche il piano «a consumo»** (Arou):
+ * nessun canone, il freemium compra prove a questo prezzo (lo poteva già fare).
+ * Netto d'IVA va da $0,238 (merchant italiano) a $0,29 (estero o reverse
+ * charge): resta sopra i $0,200 dello Starter, quindi la leva qui sopra regge.
+ * Su Stripe il Price è `tax_behavior: inclusive`; su Shopify è questa costante
+ * ad addebitare (`shopify/credits/route.ts`) e le imposte le aggiunge Shopify.
+ * Wix non ha acquisti una tantum: lì le prove a consumo non si comprano.
+ *
+ * ⚠️ 2026-08-07 — **su Stripe questa costante non addebita nulla.** Il checkout legge il
  * prezzo unitario da Stripe (`credits-checkout/route.ts`) e lo moltiplica; qui
  * serve a due cose sole: il totale mostrato in `CreditsPurchaseCard` e
  * l'invariante di prezzo in `apply-checkout.ts` — che però **non blocca**
@@ -168,7 +178,7 @@ export function proveAddebitate(capi: number): number {
  * ha collegato. **Cambiare questo numero senza rifare il Price su Stripe
  * rimette in piedi lo stesso difetto, in silenzio.**
  */
-export const EXTRA_CREDIT_PRICE_USD_CENTS = 36;
+export const EXTRA_CREDIT_PRICE_USD_CENTS = 29;
 
 /**
  * La valuta del listino, in un posto solo. Prima era scritta a mano in ogni
@@ -176,8 +186,17 @@ export const EXTRA_CREDIT_PRICE_USD_CENTS = 36;
  * significava trovarli tutti.
  */
 export const PLAN_CURRENCY = 'USD' as const;
-export const EXTRA_CREDITS_MIN_PURCHASE = 40; // $14,40 — sotto non copre i costi fissi Stripe
-export const EXTRA_CREDITS_MAX_PURCHASE = 2000; // $720 — anti errore di battitura
+// 26/10/2026 (Arou): minimo 5 $ → 18 prove = 5,22 $ IVA inclusa. Sul negozio italiano
+// restano ~0,21 $ a prova dopo IVA e commissioni Stripe (quota fissa 0,25 €): ~90 %.
+// Più in basso la quota fissa di Stripe porta il margine sotto il 90 %.
+export const EXTRA_CREDITS_MIN_PURCHASE = 18;
+export const EXTRA_CREDITS_MAX_PURCHASE = 2000; // $580 — anti errore di battitura
+// 06/11/2026 (Arou): pacchetti di prove, sempre a EXTRA_CREDIT_PRICE_USD_CENTS
+// l'una (20 = 5,80 $ … 200 = 58 $), nessuno sconto quantità, il minimo sta sopra
+// i 5 $. Su Wix sono gli unici importi (piani «Single» del Dev Center, IVA di Wix
+// aggiunta sopra; il Product ID lo genera Wix dal nome «20 Try-Ons» → `20-try-ons`:
+// non rinominarli); su Stripe sono scorciatoie accanto al campo libero.
+export const CREDIT_PACKS = [20, 50, 100, 200] as const;
 
 /**
  * Giorni fra il soft-delete di un merchant (disinstallazione dell'app o
@@ -250,6 +269,40 @@ export function isPeriodExpired(
 }
 
 /**
+ * **Quando si rinnovano le prove**: la fine del periodo corrente, con le stesse
+ * soglie di `isPeriodExpired`. Un piano Stripe a pagamento si rinnova con la
+ * fattura (`plan_renews_at`); tutti gli altri 30 giorni dopo l'inizio del periodo.
+ * ⚠️ 08/11/2026 — banner ed email dicevano «a inizio mese», ma il periodo parte
+ * dall'azzeramento del negozio: Aura Walk ha azzerato il 04/11 e riparte il 04/12.
+ */
+export function fineDelPeriodo(
+  periodStart: string | null | undefined,
+  plan: MerchantPlan | string | null | undefined = null,
+  billingChannel: string | null | undefined = null,
+  planRenewsAt: string | null | undefined = null,
+): string | null {
+  const rinnovoStripe = billingChannel !== 'shopify' && billingChannel !== 'wix';
+  const pagaStripe = Boolean(plan && plan !== 'freemium' && rinnovoStripe);
+  // Una data già passata (fattura non pagata, periodo di grazia: `handlePaymentFailed`
+  // non sposta `plan_renews_at`) non si mostra: si ripiega sulla rete dei 35 giorni.
+  const rinnovoFattura = planRenewsAt ? new Date(planRenewsAt).getTime() : NaN;
+  if (pagaStripe && Number.isFinite(rinnovoFattura) && rinnovoFattura > Date.now()) {
+    return new Date(rinnovoFattura).toISOString();
+  }
+  // Senza inizio periodo il conteggio (`readGenerativeUsedUnits`) usa il mese di
+  // calendario: il rinnovo è allora il 1° del mese prossimo. In prod la colonna è
+  // NOT NULL, ma le due funzioni devono dire la stessa cosa (rilievo Kilo #404).
+  if (!periodStart) {
+    const d = new Date();
+    return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 1)).toISOString();
+  }
+  const start = new Date(periodStart).getTime();
+  if (!Number.isFinite(start)) return null;
+  const giorni = pagaStripe ? PERIOD_FALLBACK_DAYS : PERIOD_DAYS;
+  return new Date(start + giorni * 24 * 60 * 60 * 1000).toISOString();
+}
+
+/**
  * **Prove try-on incluse nel piano, al mese** (un'unità = una prova, vedi
  * `TRYON_GENERATIVE_CREDIT_COST`). `null` sarebbe illimitato: nessun piano lo è.
  *
@@ -296,8 +349,27 @@ export const PLAN_GENERATIVE_LIMITS: Record<MerchantPlan, number | null> = {
   freemium: 10,
   starter: 200,
   growth: 500,
-  pro: 800,
 };
+
+/**
+ * Shopify a consumo (07/11/2026): il merchant resta `freemium` (10 prove al
+ * mese comprese) e Shopify gli fattura ogni prova oltre le 10 a
+ * `EXTRA_CREDIT_PRICE_USD_CENTS` tramite l'App Events API (misuratore `tryon`
+ * del piano «Pay as you go», handle `consumo`). Shopify non ha un tetto di
+ * spesa: questo è il nostro, in prove al mese oltre le gratuite. Raggiunto,
+ * il widget si ferma come a piano finito (290 $ a prezzo pieno).
+ */
+export const SHOPIFY_METERED_MONTHLY_CAP = 1000;
+
+/**
+ * Il plafond mensile di prove di un merchant: quello del piano, oppure, se
+ * paga a consumo su Shopify, le gratuite del freemium più il tetto nostro.
+ * `null` = illimitato (oggi nessun piano).
+ */
+export function limiteProve(plan: MerchantPlan, consumoShopify: boolean): number | null {
+  if (consumoShopify) return (PLAN_GENERATIVE_LIMITS.freemium ?? 0) + SHOPIFY_METERED_MONTHLY_CAP;
+  return PLAN_GENERATIVE_LIMITS[plan];
+}
 
 /**
  * Prezzi mensili dei piani, in USD — **gli stessi nei due canali** (vedi
@@ -313,7 +385,6 @@ export const PLAN_PRICES_USD: Record<MerchantPlan, number> = {
   freemium: 0,
   starter: 40,
   growth: 93,
-  pro: 140,
 };
 
 /** Ordine crescente dei piani — per validare upgrade/downgrade (Story 5.3). */
@@ -321,7 +392,6 @@ export const PLAN_RANK: Record<MerchantPlan, number> = {
   freemium: 0,
   starter: 1,
   growth: 2,
-  pro: 3,
 };
 
 /** Stato della subscription Stripe associata al merchant (Story 5.3). */

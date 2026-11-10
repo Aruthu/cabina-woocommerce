@@ -216,8 +216,9 @@ export function createRevealSlider(
   // chi non ci prova vede metà risultato e se ne va.
   //
   // ⚠️ Prima spariva dopo ~3 secondi. Troppo poco: Arou l'ha visto svanire prima
-  // di capire cosa dicesse. Ora **resta fisso** — non è un avviso da smaltire, è
-  // l'etichetta di un comando che serve finché il risultato è a schermo.
+  // di capire cosa dicesse. Ora resta finché l'acquirente non muove la riga, col
+  // pomello o toccando la foto: a quel punto ha capito, e la scritta copriva le
+  // scarpe (Arou, 04/11/2026; solo col trascinamento, al tocco restava lì).
   const hint = document.createElement('div');
   hint.setAttribute('data-cabina-reveal-hint', '');
   // ⚠️ Con `getLocaleString` qui si leggeva «reveal_result.drag_hint» in chiaro,
@@ -225,22 +226,20 @@ export function createRevealSlider(
   // si servono a parte e hanno la loro cache — una chiave nuova non c'è ancora.
   // Il ripiego è una stringa che esiste da prima e dice comunque cos'è.
   hint.textContent = `↔  ${getLocaleStringOr('reveal_result.drag_hint', 'reveal_result.slider_label')}`;
-  // ⚠️ In BASSO A SINISTRA. In alto al centro (fino al 14/10/2026) copriva la
-  // testa della persona: nelle foto in piedi il viso sta proprio lì (Arou, dal
-  // telefono su sole-completo). In basso a destra stanno il badge della taglia
-  // a tutto schermo (max-width 70%) e il bottone «ingrandisci»; in basso a
-  // sinistra ci sono i piedi e la strada, e niente altro.
-  // shortcut: a tutto schermo su un telefono stretto il badge può arrivare
-  // fin qui sotto; se si vede, il badge va messo sotto l'immagine anche lì.
+  // ⚠️ SOPRA IL POMELLO, e si muove con la riga (`applyClip`). In alto al
+  // centro (fino al 14/10/2026) copriva il viso; in basso a sinistra (fino al
+  // 05/11/2026) la scarpa (Arou, dal telefono sulla demo). In una foto a figura
+  // intera non c'è un angolo libero: la scritta sta allora sulla cosa che
+  // descrive, e sparisce al primo gesto.
   hint.style.cssText = [
     'position:absolute',
-    'left:16px',
-    'bottom:16px',
+    `left:${INITIAL_CLIP_PERCENT}%`,
+    'bottom:calc(50% + 36px)',
     'max-width:calc(100% - 32px)',
     'overflow:hidden',
     'text-overflow:ellipsis',
-    'transform:scale(calc(1 / var(--cabina-zoom, 1)))',
-    'transform-origin:bottom left',
+    'transform:translateX(-50%) scale(calc(1 / var(--cabina-zoom, 1)))',
+    'transform-origin:bottom center',
     'padding:6px 12px',
     'border-radius:999px',
     'background:rgba(0,0,0,0.6)',
@@ -280,6 +279,7 @@ export function createRevealSlider(
     corrente = clamped;
     generatedImg.style.clipPath = buildClipPath(clamped);
     handle.style.left = `${clamped}%`;
+    hint.style.left = `${clamped}%`;
     handle.setAttribute('aria-valuenow', String(Math.round(clamped)));
     callbacks.onClipChange?.(clamped);
   }
@@ -287,7 +287,10 @@ export function createRevealSlider(
   function onPointerMove(e: PointerEvent): void {
     if (!isDragging) return;
     // Sotto la soglia è il tremolio di un dito che tocca, non un trascinamento.
-    if (Math.abs(e.clientX - pressioneX) > DRAG_THRESHOLD) haTrascinato = true;
+    if (Math.abs(e.clientX - pressioneX) > DRAG_THRESHOLD) {
+      haTrascinato = true;
+      hint.remove();
+    }
     const rect = container.getBoundingClientRect();
     const percent = computeClipPercent(rect, e.clientX);
     applyClip(percent);
@@ -306,11 +309,24 @@ export function createRevealSlider(
     document.removeEventListener('pointercancel', endDrag);
   }
 
-  handle.addEventListener('pointerdown', (e: PointerEvent) => {
+  // ⚠️ Sul CONTENITORE, non solo sulla maniglia. La scritta dice «trascina» e
+  // sul telefono si trascina la foto, non una riga da 4 px: fino al 05/11/2026
+  // quel gesto non muoveva niente e non toglieva la scritta (riprodotto con un
+  // Pixel 7 emulato su sole-completo: la riga ferma, «Drag to compare» lì).
+  // Ingrandita, il trascinamento sulla foto è il pan dello zoom-handler.
+  container.addEventListener('pointerdown', (e: PointerEvent) => {
     // Guardia re-entrancy: un secondo pointer (es. altro dito) che preme la
     // maniglia mentre il primo è già in drag non deve sovrascrivere lo stato.
     if (isDragging) return;
+    // `--cabina-zoom` non c'è finché non si zooma: vuoto = 1. La soglia è la
+    // stessa 1.01 dello zoom-handler (lì è un letterale in sei punti).
+    if ((parseFloat(getComputedStyle(container).getPropertyValue('--cabina-zoom')) || 1) > 1.01) return;
     e.preventDefault();
+    // Sulla foto la scritta si toglie al primo movimento (`onPointerMove`), non
+    // alla pressione: con `touch-action: pan-y` anche uno scroll verticale che
+    // parte sulla foto passa di qui, e non è un'interazione col confronto
+    // (rilievo Kilo, PR #390). Sul pomello la pressione è già l'intenzione.
+    if (handle.contains(e.target as Node)) hint.remove();
     isDragging = true;
     haTrascinato = false;
     pressioneX = e.clientX;
@@ -326,10 +342,9 @@ export function createRevealSlider(
     // il touch) senza mai emettere pointerup — senza questo handler isDragging
     // resterebbe bloccato a true e i listener document non verrebbero mai rimossi.
     document.addEventListener('pointercancel', endDrag);
-    // Aggiorna subito alla posizione del click (non solo al move)
-    const rect = container.getBoundingClientRect();
-    const percent = computeClipPercent(rect, e.clientX);
-    applyClip(percent);
+    // Niente salto alla pressione: la riga segue il dito dal primo movimento.
+    // Un tocco fermo è un click, e lì `primaDelClick` deve leggere la posizione
+    // di PRIMA del tocco, o il secondo tocco non riporterebbe più la riga indietro.
   });
 
   // Click sul container (non solo sulla maniglia) sposta la clip lì.
@@ -343,6 +358,7 @@ export function createRevealSlider(
   let primaDelClick = INITIAL_CLIP_PERCENT;
   container.addEventListener('click', (e: MouseEvent) => {
     if (isDragging) return;
+    hint.remove();
     // Il click che chiude un trascinamento della maniglia: la riga è già al suo
     // posto, e contarlo come primo tocco farebbe annullare il trascinamento dopo.
     // ⚠️ Non «il click è sulla maniglia»: dopo il primo tocco la maniglia è
@@ -369,6 +385,7 @@ export function createRevealSlider(
 
   // ── a11y: tastiera (frecce sinistra/destra) ─────────────────────────────
   handle.addEventListener('keydown', (e: KeyboardEvent) => {
+    if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') hint.remove();
     const current = Number(handle.getAttribute('aria-valuenow') ?? INITIAL_CLIP_PERCENT);
     if (e.key === 'ArrowLeft') {
       e.preventDefault();

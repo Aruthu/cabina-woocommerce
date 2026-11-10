@@ -5,7 +5,7 @@ Requires at least: 6.5
 Requires Plugins: woocommerce
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 1.3.3
+Stable tag: 1.3.4
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -122,6 +122,12 @@ Yes. The plugin uses standard WooCommerce hooks. If your theme does not support 
 4. The Cabina Dashboard, where you customize the widget
 
 == Changelog ==
+
+= 1.3.4 =
+
+* The try-on uses the full-size product photo (the largest image in the gallery), not the 600 px copy: garment details such as necklines come out cleaner
+* With variable products, the try-on uses the photo of the variation the shopper selected, not the main product photo
+* Photos that show the garment folded are skipped: the try-on uses the first gallery photo that shows the whole garment
 
 = 1.3.3 =
 

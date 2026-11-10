@@ -171,6 +171,7 @@ export function createPhotoCapture(
     'align-items:flex-start',
     'gap:8px',
     'margin-bottom:12px',
+    'text-align:start', // PrestaShop Classic: `label{text-align:right}` globale
     'font-size:12px',
     'line-height:1.45',
     'color:#4b5563',
@@ -217,7 +218,7 @@ export function createPhotoCapture(
   const uploadBtn = document.createElement('button');
   uploadBtn.textContent = strings.uploadButton;
   uploadBtn.setAttribute('data-cabina-upload-btn', '');
-  uploadBtn.style.cssText = buttonStyle();
+  uploadBtn.style.cssText = `${buttonStyle()};font-weight:700;color:#000`;
   uploadBtn.addEventListener('click', () => {
     if (!consentCheckbox.checked) return;
     fileInput.click();
@@ -235,7 +236,8 @@ export function createPhotoCapture(
   function applyConsentState(): void {
     const given = consentCheckbox.checked;
     uploadBtn.disabled = !given;
-    uploadBtn.style.opacity = given ? '1' : '0.5';
+    // Testo nero anche da spento (Arou, 04/11): lo stato lo dicono il cursore e l'avviso arancione.
+    uploadBtn.style.cursor = given ? 'pointer' : 'not-allowed';
     consentHint.textContent = given ? '' : strings.consentRequired;
   }
   applyConsentState();

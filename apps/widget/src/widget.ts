@@ -4,7 +4,7 @@ import type { FashnGarmentCategory } from '@cabina/shared';
 import { resolveLanguage, loadLocale, getLocaleString, getLocaleStringOr, getLocaleStringDefault } from './i18n/i18n';
 import { widgetReducer, createInitialContext, resetSessionContext } from './state/machine';
 import { isBrowserSupported, getBrowserUpdateLink } from './utils/browser';
-import { caricaImmaginiVarianti, extractProductImageUrl } from './utils/product-image';
+import { caricaImmaginiVarianti, extractProductImageUrl, resetFotoScartate, rifiutaFotoCapo, scartaFotoCapo } from './utils/product-image';
 import { createPhotoCapture } from './features/photo/PhotoCapture';
 import { downscalePhotoDataUrl, MEASURE_MAX_EDGE_PX } from './features/photo/photo-utils';
 import { createMeasuresForm } from './features/avatar/measures-form';
@@ -16,7 +16,7 @@ import {
   shouldAttemptGenerative,
   CURRENT_PHOTO_CONSENT_VERSION,
 } from './features/photo-consent/photo-consent-storage';
-import { createModelGallery, createMoreModelsScreen, createAudienceChoiceScreen, resolveModelThumbs, setModelError, fetchModelAsDataUrl } from './features/model-gallery/model-gallery';
+import { createFotoScelta, dimenticaModellaScelta, segnaModellaScelta, createModelGallery, createMoreModelsScreen, createAudienceChoiceScreen, resolveModelThumbs, setModelError, fetchModelAsDataUrl } from './features/model-gallery/model-gallery';
 import { KIDS_MODELS, KIDS_AGE_BANDS, KIDS_GENDER_LABEL_KEYS, type PresetModel } from './features/model-gallery/presets';
 import { createGarmentSelect, resolvePageGarmentParams, type PageGarmentParams } from './features/garment-select/garment-select';
 import { showTryOnOverlay, removeTryOnOverlay, updateSizeBadge, setShowSizeScore } from './features/tryon/tryon-overlay';
@@ -28,6 +28,7 @@ import {
   attribuzioneDaRimettere,
   __resetAttribuzioneForTesting,
 } from './features/reveal-result/attribuzione-ordine';
+import { registraProvaWix } from './features/reveal-result/attribuzione-wix';
 import type { WidgetPublicConfig, Measures } from '@cabina/shared';
 import { BUTTON_ANCHORS, BUTTON_TARGET_ATTR, AUTO_OPEN_PARAM, AUTO_OPEN_VALUE } from '@cabina/shared';
 import type { GarmentAnalysis, GarmentCategory } from './state/types';
@@ -91,12 +92,19 @@ let modelSelectionInFlight = false;
  */
 export const CATEGORIE_CON_AVVISO: readonly GarmentCategory[] = ['accessory'];
 
+/** Imposta il logo del merchant — solo per Vitest. Non chiamare in produzione. */
+export function __setLogoUrlForTesting(url: string | null): void {
+  currentLogoUrl = url;
+}
+
 /** Reset stato inizializzazione — solo per Vitest. Non chiamare in produzione. */
 export function __resetWidgetForTesting(): void {
   initStarted = false;
+  currentLogoUrl = null;
   currentSessionId = null;
   sessionCompleteSent = false;
   sessionStarted = false;
+  dimenticaModellaScelta();
   widgetContext = createInitialContext(); // lo stato del reducer non deve trapelare tra i test
   osservatoreBottone?.disconnect();
   osservatoreBottone = null;
@@ -106,6 +114,7 @@ export function __resetWidgetForTesting(): void {
   garmentAnalysis = null;
   garmentAnalysisDone = Promise.resolve();
   garmentAnalysisPending = false;
+  analisiCapoDaAvviare = null;
   sizeTables = undefined;
   sizeTablesDone = Promise.resolve();
   rispostaPerChi = undefined;
@@ -148,6 +157,11 @@ let garmentAnalysis: GarmentAnalysis | null = null; // Analisi capo in backgroun
 // analisi in corso (widget non inizializzato, o pagina senza immagine prodotto).
 let garmentAnalysisDone: Promise<void> = Promise.resolve();
 let garmentAnalysisPending = false;
+// 2026-10-24 — l'analisi parte al primo click sul pulsante, non al caricamento:
+// è una chiamata a pagamento al modello di visione, e partiva a ogni visita della
+// pagina prodotto (valetta.fr: decine al giorno, sei aperture). Qui chiave e URL
+// dell'API fino a quel click; `null` = già partita o niente da analizzare.
+let analisiCapoDaAvviare: { apiKey: string; baseUrl: string } | null = null;
 // Le tabelle taglie del merchant, chieste all'avvio come l'analisi del capo
 // (12/10/2026): lo step `photo` deve sapere PRIMA di disegnarsi se il capo è da
 // bambino, perché in quel caso non mostra il caricamento foto. `undefined` =
@@ -366,23 +380,10 @@ function ensureWidgetModal(onClose?: () => void): HTMLElement {
     ].join(';');
   }
 
-  // Logo brand del merchant (opzionale) — in cima al contenuto del modal.
-  const logo = sanitizeLogoUrl(currentLogoUrl);
-  if (logo) {
-    const logoImg = document.createElement('img');
-    logoImg.setAttribute('data-cabina-logo', '');
-    logoImg.src = logo;
-    logoImg.alt = '';
-    logoImg.style.cssText = [
-      'display:block',
-      'max-height:36px',
-      'max-width:160px',
-      'width:auto',
-      'object-fit:contain',
-      mobile ? 'margin:0 auto 16px' : 'margin:0 0 16px',
-    ].join(';');
-    container.appendChild(logoImg);
-  }
+  // Il logo del merchant NON si mette qui: ogni schermata fa
+  // `content.innerHTML = ''` subito dopo e lo cancellerebbe (fino al
+  // 07/11/2026 è andata così: nessun cliente l'ha mai visto). Lo rimette
+  // `restoreDragHandle`, insieme alla maniglia, ad ogni svuotamento.
 
   overlay.appendChild(container);
   document.body.appendChild(overlay);
@@ -401,8 +402,30 @@ function removeWidgetModal(): void {
   }
 }
 
-function restoreDragHandle(content: Element): void {
-  if (!isMobileViewport()) return;
+/**
+ * Rimette in cima al contenuto appena svuotato ciò che ogni schermata deve
+ * avere: la maniglia del pannello (solo telefono) e il logo del merchant
+ * (se configurato). Va chiamata subito dopo ogni `content.innerHTML = ''`.
+ */
+export function restoreDragHandle(content: Element): void {
+  const mobile = isMobileViewport();
+  const logo = sanitizeLogoUrl(currentLogoUrl);
+  if (logo) {
+    const logoImg = document.createElement('img');
+    logoImg.setAttribute('data-cabina-logo', '');
+    logoImg.src = logo;
+    logoImg.alt = '';
+    logoImg.style.cssText = [
+      'display:block',
+      'max-height:36px',
+      'max-width:160px',
+      'width:auto',
+      'object-fit:contain',
+      mobile ? 'margin:0 auto 16px' : 'margin:0 0 16px',
+    ].join(';');
+    content.insertBefore(logoImg, content.firstChild);
+  }
+  if (!mobile) return;
   const handle = document.createElement('div');
   handle.setAttribute('data-cabina-sheet-handle', '');
   handle.style.cssText = 'width:40px;height:4px;background:#e0e0e0;border-radius:2px;margin:12px auto 16px';
@@ -448,8 +471,9 @@ export function renderRenderErrorBanner(content: Element, error: string | null):
 /**
  * Story 12.5 (Task 2.1): bottone "← Indietro" condiviso da `form` e
  * `garment_select` (pattern `restoreDragHandle` — helper di rendering
- * riusato, non un componente separato). Inserito subito dopo il drag
- * handle mobile (se presente), altrimenti come primo figlio del contenuto.
+ * riusato, non un componente separato). Inserito subito dopo il logo del
+ * merchant o il drag handle mobile (se presenti), altrimenti come primo
+ * figlio del contenuto.
  * Il click ferma la propagazione: un tap sul bottone non deve attivare
  * lo swipe-down-to-close del modal mobile (Task 3.2).
  */
@@ -481,9 +505,9 @@ export function renderBackButton(content: Element, onBack: () => void): void {
   button.addEventListener('touchstart', (e) => e.stopPropagation(), { passive: true });
   button.addEventListener('touchend', (e) => e.stopPropagation(), { passive: true });
 
-  const handle = content.querySelector('[data-cabina-sheet-handle]');
-  if (handle) {
-    handle.insertAdjacentElement('afterend', button);
+  const sopra = content.querySelector('[data-cabina-logo]') ?? content.querySelector('[data-cabina-sheet-handle]');
+  if (sopra) {
+    sopra.insertAdjacentElement('afterend', button);
   } else {
     content.insertBefore(button, content.firstChild);
   }
@@ -581,6 +605,7 @@ function renderState(button: HTMLElement): void {
         },
         {
           onPhotoReady: (dataUrl: string) => {
+            segnaModellaScelta(content, null);
             widgetContext = widgetReducer(widgetContext, { type: 'PHOTO_UPLOADED', dataUrl });
             renderState(button);
           },
@@ -631,7 +656,7 @@ function renderState(button: HTMLElement): void {
       if (MODEL_GALLERY_ENABLED) {
         const orLabel = document.createElement('p');
         orLabel.textContent = getLocaleString('model_gallery.or_label');
-        orLabel.style.cssText = 'text-align:center;color:#9ca3af;font-size:12px;margin:16px 0 8px;text-transform:uppercase;letter-spacing:0.05em;';
+        orLabel.style.cssText = 'text-align:center;color:#000;font-size:12px;font-weight:700;margin:16px 0 8px;text-transform:uppercase;letter-spacing:0.05em;';
         content.appendChild(orLabel);
 
         // Una sola funzione per le tre schermate della galleria (vedi `selezionaModella`).
@@ -700,6 +725,8 @@ function renderState(button: HTMLElement): void {
       // prova, quindi non c'era granché da ricordare.
       const prefillMeasures = widgetContext.measures;
 
+      if (widgetContext.photoData) content.appendChild(createFotoScelta(widgetContext.photoData));
+
       const form = createMeasuresForm(
         {
           title: getLocaleString('form.title'),
@@ -761,7 +788,9 @@ function renderState(button: HTMLElement): void {
               } catch {
                 // Analisi fallita: resta il default sopra.
               }
-              garments = [{ imageUrl: url, category: params.category, removeExisting: params.removeExisting, garmentPhotoType: 'auto' }];
+              // Riletta dopo l'analisi: una foto col capo piegato è stata scartata (vedi avviaAnalisiCapo).
+              const foto = extractProductImageUrl();
+              if (foto) garments = [{ imageUrl: foto, category: params.category, removeExisting: params.removeExisting, garmentPhotoType: 'auto' }];
             }
             // L'attesa sopra dura secondi, e nel frattempo si può chiudere o
             // tornare indietro: senza questo, una generazione da 30 crediti
@@ -1091,7 +1120,11 @@ function renderState(button: HTMLElement): void {
       const capoDellaPagina =
         !widgetContext.selectedGarments ||
         widgetContext.selectedGarments.some((g) => g.imageUrl === extractProductImageUrl());
-      if (capoDellaPagina) segnaProvaNelForm(currentSessionId);
+      if (capoDellaPagina) {
+        segnaProvaNelForm(currentSessionId);
+        // Story 14.2: su Wix non c'è un form; lo script Wix di Cabina legge da qui.
+        registraProvaWix(currentSessionId, location.pathname);
+      }
 
       // Story 12.4 (fix code review, P1-P2): apiKey/baseUrl servono SIA al calcolo
       // taglia esistente SIA al nuovo apiContext dello slider (swap capo + report) —
@@ -1184,6 +1217,7 @@ function renderState(button: HTMLElement): void {
       // Preserva baseUrl attraverso il reset (l'apiKey sopravvive già via
       // currentApiKey). Vedi resetSessionContext per il perché.
       widgetContext = resetSessionContext(widgetContext);
+      dimenticaModellaScelta();
       break;
 
     default:
@@ -1323,6 +1357,7 @@ function injectButton(config: WidgetPublicConfig): void {
           currentSessionId = r.sessionId ?? null;
         }).catch(() => {});
       }
+      avviaAnalisiCapo();
       rispostaPerChi = undefined;
       widgetContext = widgetReducer(widgetContext, { type: 'OPEN' });
       renderState(button);
@@ -1549,7 +1584,10 @@ async function selezionaModella(model: PresetModel, overlay: HTMLElement, button
   const baseUrl = widgetContext.baseUrl ?? '';
   const modalContent = overlay.querySelector('[data-cabina-modal-content]');
   // Reset di un eventuale errore precedente prima del nuovo tentativo (P7).
-  if (modalContent) setModelError(modalContent, '');
+  if (modalContent) {
+    setModelError(modalContent, '');
+    segnaModellaScelta(modalContent, model.id);
+  }
   try {
     // Normalizzata come una foto caricata: gli asset preset sono già
     // leggeri, ma così il formato a valle è davvero uno solo — è ciò
@@ -1568,7 +1606,10 @@ async function selezionaModella(model: PresetModel, overlay: HTMLElement, button
     // resta sullo step 'photo' (l'acquirente può riprovare o usare la foto).
     console.warn('[widget] Failed to load preset model', model.assetPath, e);
     const errTarget = overlay.querySelector('[data-cabina-modal-content]');
-    if (errTarget) setModelError(errTarget, getLocaleString('model_gallery.load_error'));
+    if (errTarget) {
+      setModelError(errTarget, getLocaleString('model_gallery.load_error'));
+      segnaModellaScelta(errTarget, null);
+    }
   } finally {
     modelSelectionInFlight = false;
   }
@@ -1584,15 +1625,41 @@ function startGarmentAnalysis(apiKey: string, baseUrl: string): void {
   // Le foto delle varianti (Shopify): la prova segue il colore scelto dopo
   // l'apertura della pagina. Senza attesa, perché serve solo al click.
   void caricaImmaginiVarianti();
+  resetFotoScartate();
   garmentAnalysis = null;
-  const productUrl = extractProductImageUrl();
-  if (!productUrl) {
-    garmentAnalysisDone = Promise.resolve();
-    return;
-  }
+  garmentAnalysisDone = Promise.resolve();
+  analisiCapoDaAvviare = { apiKey, baseUrl };
+}
+
+/** Al primo click sul pulsante: l'analisi del capo, una volta per pagina. */
+function avviaAnalisiCapo(): void {
+  if (!analisiCapoDaAvviare) return;
+  const { apiKey, baseUrl } = analisiCapoDaAvviare;
+  analisiCapoDaAvviare = null;
+  if (!extractProductImageUrl()) return;
   garmentAnalysisPending = true;
-  garmentAnalysisDone = analyzeGarmentFromUrl(apiKey, productUrl, baseUrl)
-    .then((result) => { garmentAnalysis = result; })
+  garmentAnalysisDone = (async () => {
+    // 10/11/2026 (Arou) — una foto col capo piegato si scarta: il Floral Tea Dress
+    // piegato usciva come maglia con i pantaloni inventati. Si passa alla foto
+    // seguente della galleria; senza foto intere `extractProductImageUrl` dà null
+    // e la cabina chiede di scegliere un capo. Tetto: 4 analisi per pagina.
+    for (let i = 0; i < 4; i++) {
+      const url = extractProductImageUrl();
+      if (!url) { garmentAnalysis = null; return; }
+      const result = await analyzeGarmentFromUrl(apiKey, url, baseUrl);
+      garmentAnalysis = result;
+      if (!capoPiegato(result)) return;
+      scartaFotoCapo(url);
+    }
+    // Quattro foto piegate: niente prova con la foto della pagina (rilievo Kilo #413).
+    garmentAnalysis = null;
+    rifiutaFotoCapo();
+  })()
     .catch(() => { garmentAnalysis = null; })
     .finally(() => { garmentAnalysisPending = false; });
+}
+
+/** Le scarpe e gli accessori non si piegano: lì `fullyVisible` non decide nulla. */
+function capoPiegato(a: GarmentAnalysis | null): boolean {
+  return a?.fullyVisible === false && ['top', 'bottom', 'dress', 'outerwear'].includes(a.category);
 }
