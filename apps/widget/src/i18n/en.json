@@ -23,7 +23,7 @@
     "consent_text": "I consent to my photo being sent to external AI services — PrunaAI (United States) to generate the try-on, and Vercel AI Gateway (United States; an OpenAI model hosted on Microsoft Azure) to estimate my measurements and to check that the garment in the result is the real one — and I accept the {termini} and the {privacy}. I confirm that I am at least 18 years old.",
     "consent_terms_label": "Terms and Conditions",
     "consent_privacy_label": "Privacy Notice",
-    "consent_required": "Accept the terms and conditions and the privacy policy to upload your photo"
+    "consent_required": "Accept the terms and conditions and the privacy notice to upload your photo"
   },
   "form": {
     "title": "Your Measurements",
@@ -46,6 +46,8 @@
     "invalid_waist": "Waist: enter a value between 50 and 200 cm",
     "invalid_hips": "Hips: enter a value between 50 and 200 cm",
     "height_calibration_hint": "Enter your height for more accurate measurements",
+    "weight_unused": "With these values the weight isn't used. Check height (cm) and weight (kg).",
+    "weight_check_unit": "Check that the weight is in kg, not pounds.",
     "confirm_and_try": "Confirm and try on",
     "foot": "Foot length (cm) - optional",
     "invalid_foot": "Foot length: enter a value between 15 and 40 cm",

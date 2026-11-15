@@ -26,7 +26,7 @@
     "consent_required": "Terima syarat dan ketentuan serta kebijakan privasi untuk mengunggah foto Anda"
   },
   "form": {
-    "title": "Ukuran Anda",
+    "title": "Ukuran tubuh Anda",
     "height": "Tinggi badan (cm)",
     "weight": "Berat badan (kg) - opsional",
     "bust": "Lingkar dada (cm)",
@@ -45,7 +45,9 @@
     "invalid_bust": "Lingkar dada: masukkan nilai antara 50 dan 200 cm",
     "invalid_waist": "Lingkar pinggang: masukkan nilai antara 50 dan 200 cm",
     "invalid_hips": "Lingkar pinggul: masukkan nilai antara 50 dan 200 cm",
-    "height_calibration_hint": "Masukkan tinggi badan Anda untuk ukuran yang lebih akurat",
+    "height_calibration_hint": "Masukkan tinggi badan Anda untuk ukuran tubuh yang lebih akurat",
+    "weight_unused": "Dengan nilai ini, berat badan tidak digunakan. Periksa tinggi badan (cm) dan berat badan (kg).",
+    "weight_check_unit": "Pastikan berat badan dalam kg, bukan pon.",
     "confirm_and_try": "Konfirmasi dan coba",
     "foot": "Panjang kaki (cm) - opsional",
     "invalid_foot": "Kaki: masukkan nilai antara 15 dan 40 cm",

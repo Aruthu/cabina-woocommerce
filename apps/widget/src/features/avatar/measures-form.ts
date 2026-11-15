@@ -1,7 +1,7 @@
 import type { Measures, StimaMisure } from '@cabina/shared';
 import type { FitPreference, MeasureSource } from '../size/size-recommendation';
 import { calibrateCircumferences, REFERENCE_HEIGHT_CM } from './measure-estimation';
-import { misureDaAltezzaPeso, type Sesso } from './stima-da-peso';
+import { misureDaAltezzaPeso, pesoForseInLibbre, type Sesso } from './stima-da-peso';
 import { VISION_UNAVAILABLE_ERROR } from '@cabina/shared';
 
 export interface MeasuresFormStrings {
@@ -34,7 +34,11 @@ export interface MeasuresFormStrings {
   fitFitted?: string;
   fitRegular?: string;
   fitRelaxed?: string;
+  /** Riga sotto il peso (15/11/2026). Opzionali per la stessa ragione del piede. */
+  weightUnused?: string;
+  weightCheckUnit?: string;
 }
+
 
 export interface MeasuresFormCallbacks {
   /** Può restituire una Promise: il bottone resta spento finché non si risolve
@@ -206,6 +210,7 @@ export function createMeasuresForm(
    *  dalla foto dall'AI, che arriva con la stima (18/09/2026). */
   let sessoFormula: Sesso | null = sesso;
   let heightHintEl: HTMLElement | null = null;
+  let weightHintEl: HTMLElement | null = null;
 
   const fieldNames: MeasureField[] = ['heightCm', 'weightKg', 'bustCm', 'waistCm', 'hipsCm'];
   const invisibleLabels: string[] = [
@@ -345,6 +350,15 @@ export function createMeasuresForm(
       wrapper.appendChild(hint);
       heightHintEl = hint;
     }
+    // Riga sotto il peso: il peso non usato dalla formula, o forse in libbre.
+    if (fieldName === 'weightKg') {
+      const hint = document.createElement('div');
+      hint.setAttribute('data-cabina-weight-hint', '');
+      hint.setAttribute('aria-live', 'polite');
+      hint.style.cssText = 'font-size:12px;color:#92400e;margin-top:2px;display:none;';
+      wrapper.appendChild(hint);
+      weightHintEl = hint;
+    }
 
     container.appendChild(wrapper);
   }
@@ -482,6 +496,8 @@ export function createMeasuresForm(
 
     updateConfirmButton();
     updateHeightHint();
+    // Anche col prefill della sessione, che non ricalibra (rilievo Kilo, #427).
+    updateWeightHint();
   }
 
   /** Mostra "Stimato automaticamente" solo su campi auto-rilevati, non manuali e valorizzati. */
@@ -498,11 +514,6 @@ export function createMeasuresForm(
    * vuota/non valida → ripristina i valori base (scala 1).
    */
   function recalibrateFromHeight(): void {
-    const numero = (field: HTMLInputElement, min: number, max: number): number | null => {
-      const raw = field.value.trim();
-      const n = raw === '' ? NaN : parseFloat(normalizeDecimal(raw));
-      return !isNaN(n) && n >= min && n <= max ? n : null;
-    };
     const target = numero(fields.heightCm, 100, 220);
 
     // 18/09/2026 — con altezza E peso le circonferenze vengono dalla formula
@@ -510,6 +521,7 @@ export function createMeasuresForm(
     // obesi verso la media, il peso no. I campi scritti a mano restano intatti.
     const peso = numero(fields.weightKg, 30, 250);
     const daPeso = target != null && peso != null ? misureDaAltezzaPeso(target, peso, sessoFormula) : null;
+    updateWeightHint();
     if (daPeso) {
       for (const name of ['bustCm', 'waistCm', 'hipsCm'] as const) {
         if (manualFields.has(name)) continue;
@@ -539,6 +551,30 @@ export function createMeasuresForm(
       const v = calibrated[name];
       if (v != null) fields[name].value = String(v);
     }
+  }
+
+  /** Altezza o peso letti dal campo, `null` se vuoti o fuori dai limiti del modulo. */
+  function numero(field: HTMLInputElement, min: number, max: number): number | null {
+    const raw = field.value.trim();
+    const n = raw === '' ? NaN : parseFloat(normalizeDecimal(raw));
+    return !isNaN(n) && n >= min && n <= max ? n : null;
+  }
+
+  /**
+   * La formula ha limiti più stretti del modulo (140-210 cm, 35-200 kg, indice
+   * 15-50): quando scarta il peso lo si dice, invece di usare la foto in silenzio.
+   */
+  function updateWeightHint(): void {
+    if (!weightHintEl) return;
+    const altezza = numero(fields.heightCm, 100, 220);
+    const peso = numero(fields.weightKg, 30, 250);
+    let avviso = '';
+    if (altezza != null && peso != null) {
+      if (!misureDaAltezzaPeso(altezza, peso, sessoFormula)) avviso = strings.weightUnused ?? "With these values the weight isn't used. Check height (cm) and weight (kg).";
+      else if (pesoForseInLibbre(altezza, peso, sessoFormula, autoBaseMeasures && calibrateCircumferences(autoBaseMeasures, referenceHeightCm, altezza))) avviso = strings.weightCheckUnit ?? 'Check that the weight is in kg, not pounds.';
+    }
+    weightHintEl.textContent = avviso;
+    weightHintEl.style.display = avviso ? 'block' : 'none';
   }
 
   /** Mostra l'hint altezza solo dopo un'auto-rilevazione e finché il campo è vuoto. */

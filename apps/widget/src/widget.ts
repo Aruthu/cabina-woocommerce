@@ -765,6 +765,9 @@ function renderState(button: HTMLElement): void {
           fitFitted: senzaChiave(getLocaleString('form.fit_fitted')),
           fitRegular: senzaChiave(getLocaleString('form.fit_regular')),
           fitRelaxed: senzaChiave(getLocaleString('form.fit_relaxed')),
+          // Riga sotto il peso (15/11/2026): stessi fallback del piede.
+          weightUnused: senzaChiave(getLocaleString('form.weight_unused')),
+          weightCheckUnit: senzaChiave(getLocaleString('form.weight_check_unit')),
         },
         {
           onConfirm: async (measures, measureSource, fit) => {

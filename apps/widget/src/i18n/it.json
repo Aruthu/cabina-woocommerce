@@ -46,6 +46,8 @@
     "invalid_waist": "Vita: inserisci un valore tra 50 e 200 cm",
     "invalid_hips": "Fianchi: inserisci un valore tra 50 e 200 cm",
     "height_calibration_hint": "Inserisci la tua altezza per misure più precise",
+    "weight_unused": "Con questi valori il peso non viene usato. Controlla altezza (cm) e peso (kg).",
+    "weight_check_unit": "Controlla che il peso sia in kg, non in libbre.",
     "confirm_and_try": "Conferma e prova",
     "foot": "Lunghezza piede (cm) - opzionale",
     "invalid_foot": "Piede: inserisci un valore tra 15 e 40 cm",

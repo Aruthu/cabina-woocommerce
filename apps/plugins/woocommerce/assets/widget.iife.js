@@ -4993,6 +4993,18 @@
       hipsCm: Math.round(applica(coef.hips, x))
     };
   }
+  const BMI_FORSE_LIBBRE = 40;
+  const LIBBRE_PER_KG = 2.2046;
+  function pesoForseInLibbre(heightCm, weight, sesso, daFoto) {
+    const comeChili = misureDaAltezzaPeso(heightCm, weight, sesso);
+    if (!comeChili) return false;
+    const chiavi = ["bustCm", "waistCm", "hipsCm"].filter((k) => daFoto?.[k] != null);
+    if (chiavi.length === 0) return weight / (heightCm / 100) ** 2 >= BMI_FORSE_LIBBRE;
+    const comeLibbre = misureDaAltezzaPeso(heightCm, weight / LIBBRE_PER_KG, sesso);
+    if (!comeLibbre) return false;
+    const scarto = (m) => chiavi.reduce((s, k) => s + Math.abs(m[k] - daFoto[k]), 0);
+    return scarto(comeLibbre) * 2 < scarto(comeChili);
+  }
   const FIELD_CONFIG = {
     heightCm: { label: "", placeholder: "170", min: 100, max: 220, step: 0.5, required: false },
     weightKg: { label: "", placeholder: "70", min: 30, max: 250, step: 0.5, required: false },
@@ -5076,6 +5088,7 @@
     let stimeDalPeso = false;
     let sessoFormula = sesso;
     let heightHintEl = null;
+    let weightHintEl = null;
     const fieldNames = ["heightCm", "weightKg", "bustCm", "waistCm", "hipsCm"];
     const invisibleLabels = [
       strings.height,
@@ -5191,6 +5204,14 @@
         wrapper.appendChild(hint);
         heightHintEl = hint;
       }
+      if (fieldName === "weightKg") {
+        const hint = document.createElement("div");
+        hint.setAttribute("data-cabina-weight-hint", "");
+        hint.setAttribute("aria-live", "polite");
+        hint.style.cssText = "font-size:12px;color:#92400e;margin-top:2px;display:none;";
+        wrapper.appendChild(hint);
+        weightHintEl = hint;
+      }
       container.appendChild(wrapper);
     }
     let fit = "regular";
@@ -5290,6 +5311,7 @@
       for (const name of fieldNames) updateAutoLabel(name);
       updateConfirmButton();
       updateHeightHint();
+      updateWeightHint();
     }
     function updateAutoLabel(name) {
       const label = autoDetectedLabels[name];
@@ -5298,14 +5320,10 @@
       label.style.display = isAuto ? "inline" : "none";
     }
     function recalibrateFromHeight() {
-      const numero = (field, min, max) => {
-        const raw = field.value.trim();
-        const n = raw === "" ? NaN : parseFloat(normalizeDecimal(raw));
-        return !isNaN(n) && n >= min && n <= max ? n : null;
-      };
       const target = numero(fields.heightCm, 100, 220);
       const peso = numero(fields.weightKg, 30, 250);
       const daPeso = target != null && peso != null ? misureDaAltezzaPeso(target, peso, sessoFormula) : null;
+      updateWeightHint();
       if (daPeso) {
         for (const name of ["bustCm", "waistCm", "hipsCm"]) {
           if (manualFields.has(name)) continue;
@@ -5332,6 +5350,23 @@
         const v = calibrated[name];
         if (v != null) fields[name].value = String(v);
       }
+    }
+    function numero(field, min, max) {
+      const raw = field.value.trim();
+      const n = raw === "" ? NaN : parseFloat(normalizeDecimal(raw));
+      return !isNaN(n) && n >= min && n <= max ? n : null;
+    }
+    function updateWeightHint() {
+      if (!weightHintEl) return;
+      const altezza = numero(fields.heightCm, 100, 220);
+      const peso = numero(fields.weightKg, 30, 250);
+      let avviso = "";
+      if (altezza != null && peso != null) {
+        if (!misureDaAltezzaPeso(altezza, peso, sessoFormula)) avviso = strings.weightUnused ?? "With these values the weight isn't used. Check height (cm) and weight (kg).";
+        else if (pesoForseInLibbre(altezza, peso, sessoFormula, autoBaseMeasures && calibrateCircumferences(autoBaseMeasures, referenceHeightCm, altezza))) avviso = strings.weightCheckUnit ?? "Check that the weight is in kg, not pounds.";
+      }
+      weightHintEl.textContent = avviso;
+      weightHintEl.style.display = avviso ? "block" : "none";
     }
     function updateHeightHint() {
       if (!heightHintEl) return;
@@ -8564,7 +8599,10 @@
             fit: senzaChiave(getLocaleString("form.fit")),
             fitFitted: senzaChiave(getLocaleString("form.fit_fitted")),
             fitRegular: senzaChiave(getLocaleString("form.fit_regular")),
-            fitRelaxed: senzaChiave(getLocaleString("form.fit_relaxed"))
+            fitRelaxed: senzaChiave(getLocaleString("form.fit_relaxed")),
+            // Riga sotto il peso (15/11/2026): stessi fallback del piede.
+            weightUnused: senzaChiave(getLocaleString("form.weight_unused")),
+            weightCheckUnit: senzaChiave(getLocaleString("form.weight_check_unit"))
           },
           {
             onConfirm: async (measures, measureSource, fit) => {

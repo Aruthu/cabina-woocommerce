@@ -23,11 +23,11 @@
     "consent_text": "Ich willige ein, dass mein Foto an externe KI-Dienste gesendet wird — PrunaAI (USA) zur Erzeugung der Anprobe und Vercel AI Gateway (USA; ein OpenAI-Modell, das auf Microsoft Azure läuft) zur Schätzung meiner Maße und zur Prüfung, dass das Kleidungsstück im Ergebnis das echte ist — und ich akzeptiere die {termini} und die {privacy}. Ich bestätige, dass ich mindestens 18 Jahre alt bin.",
     "consent_terms_label": "AGB",
     "consent_privacy_label": "Datenschutzerklärung",
-    "consent_required": "Akzeptiere die AGB und die Datenschutzerklärung, um dein Foto hochzuladen"
+    "consent_required": "Akzeptieren Sie die AGB und die Datenschutzerklärung, um Ihr Foto hochzuladen"
   },
   "form": {
     "title": "Ihre Maße",
-    "height": "Größe (cm)",
+    "height": "Körpergröße (cm)",
     "weight": "Gewicht (kg) - optional",
     "bust": "Brustumfang (cm)",
     "waist": "Taillenumfang (cm)",
@@ -40,12 +40,14 @@
     "detecting": "Maße werden erkannt...",
     "detecting_ai": "KI-Analyse läuft...",
     "ai_detected": "Maße von KI geschätzt — bearbeitbar",
-    "invalid_height": "Größe: Wert zwischen 100 und 220 cm eingeben",
+    "invalid_height": "Körpergröße: Wert zwischen 100 und 220 cm eingeben",
     "invalid_weight": "Gewicht: Wert zwischen 30 und 250 kg eingeben",
     "invalid_bust": "Brustumfang: Wert zwischen 50 und 200 cm eingeben",
     "invalid_waist": "Taillenumfang: Wert zwischen 50 und 200 cm eingeben",
     "invalid_hips": "Hüftumfang: Wert zwischen 50 und 200 cm eingeben",
-    "height_calibration_hint": "Gib deine Größe für genauere Maße ein",
+    "height_calibration_hint": "Geben Sie Ihre Körpergröße für genauere Maße ein",
+    "weight_unused": "Mit diesen Werten wird das Gewicht nicht berücksichtigt. Körpergröße (cm) und Gewicht (kg) prüfen.",
+    "weight_check_unit": "Gewicht in kg angeben, nicht in Pfund (lb).",
     "confirm_and_try": "Bestätigen und anprobieren",
     "foot": "Fußlänge (cm) - optional",
     "invalid_foot": "Fuß: Wert zwischen 15 und 40 cm eingeben",
@@ -87,8 +89,8 @@
   },
   "model_gallery": {
     "or_label": "oder",
-    "title": "Wählen Sie ein Modell",
-    "subtitle": "Probieren Sie den Artikel an einem Modell mit ähnlicher Figur — kein Foto nötig",
+    "title": "Wählen Sie ein Model",
+    "subtitle": "Probieren Sie den Artikel an einem Model mit ähnlicher Figur — kein Foto nötig",
     "gender_female": "Damen",
     "gender_male": "Herren",
     "gender_female_kids": "Mädchen",
@@ -103,10 +105,10 @@
     "body_sturdy_male": "Kräftig",
     "body_plus": "Plus Size",
     "body_plus_male": "Plus Size",
-    "more_button": "Weitere Modelle: Alter und Figur",
-    "more_title": "Alle Modelle",
+    "more_button": "Weitere Models: Alter und Figur",
+    "more_title": "Alle Models",
     "more_subtitle": "Wählen Sie nach Alter und Figur — kein Foto nötig",
-    "load_error": "Modell konnte nicht geladen werden, erneut versuchen oder eigenes Foto nutzen"
+    "load_error": "Model konnte nicht geladen werden, erneut versuchen oder eigenes Foto nutzen"
   },
   "audience": {
     "title": "Wer wird das tragen?",

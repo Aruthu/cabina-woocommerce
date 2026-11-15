@@ -81,3 +81,38 @@ export function misureDaAltezzaPeso(
     hipsCm: Math.round(applica(coef.hips, x)),
   };
 }
+
+/** Senza foto resta solo l'indice: libbre lette come chili lo moltiplicano per
+ *  2,2, e un normopeso finisce quasi sempre oltre 40. */
+const BMI_FORSE_LIBBRE = 40;
+const LIBBRE_PER_KG = 2.2046;
+
+/**
+ * Il peso scritto sembra in libbre? (15/11/2026)
+ *
+ * Dal solo numero non si può sapere: 150 a 180 cm è una persona di 68 kg che ha
+ * scritto libbre oppure una di 150 kg. Lo dice la foto: si calcolano le misure
+ * nelle due ipotesi e si guarda quale sta più vicina a quelle stimate dalla foto.
+ * L'avviso esce solo se le libbre vincono di netto (meno della metà dello
+ * scarto): la foto tira verso la media, e chi pesa davvero tanto non deve
+ * vederlo. Così si prendono anche i magri, che la soglia sull'indice non vede
+ * (110 lb a 170 cm = indice 38).
+ *
+ * shortcut: senza foto (modella preset) resta la soglia sull'indice, cieca sotto
+ * indice vero 18; se serve di più, la strada è il selettore kg/lb.
+ */
+export function pesoForseInLibbre(
+  heightCm: number,
+  weight: number,
+  sesso?: Sesso | null,
+  daFoto?: { bustCm?: number; waistCm?: number; hipsCm?: number } | null,
+): boolean {
+  const comeChili = misureDaAltezzaPeso(heightCm, weight, sesso);
+  if (!comeChili) return false;
+  const chiavi = (['bustCm', 'waistCm', 'hipsCm'] as const).filter((k) => daFoto?.[k] != null);
+  if (chiavi.length === 0) return weight / (heightCm / 100) ** 2 >= BMI_FORSE_LIBBRE;
+  const comeLibbre = misureDaAltezzaPeso(heightCm, weight / LIBBRE_PER_KG, sesso);
+  if (!comeLibbre) return false;
+  const scarto = (m: typeof comeChili): number => chiavi.reduce((s, k) => s + Math.abs(m[k] - daFoto![k]!), 0);
+  return scarto(comeLibbre) * 2 < scarto(comeChili);
+}

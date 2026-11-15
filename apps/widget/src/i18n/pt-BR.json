@@ -46,6 +46,8 @@
     "invalid_waist": "Cintura: insira um valor entre 50 e 200 cm",
     "invalid_hips": "Quadril: insira um valor entre 50 e 200 cm",
     "height_calibration_hint": "Insira sua altura para medidas mais precisas",
+    "weight_unused": "Com esses valores, o peso não é usado. Confira a altura (cm) e o peso (kg).",
+    "weight_check_unit": "Confira se o peso está em kg, e não em libras.",
     "confirm_and_try": "Confirmar e provar",
     "foot": "Comprimento do pé (cm) - opcional",
     "invalid_foot": "Pé: insira um valor entre 15 e 40 cm",
