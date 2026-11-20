@@ -5,7 +5,7 @@ Requires at least: 6.5
 Requires Plugins: woocommerce
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 1.3.5
+Stable tag: 1.3.6
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -35,7 +35,8 @@ The virtual try-on shows how the garment looks on the shopper; the size recommen
 2. **Generate your API key** — In the Cabina Dashboard → Installation → Your API key. It is shown only once: copy it right away
 3. **Install this plugin** — From the WordPress Plugin Directory or by uploading the ZIP
 4. **Paste your API key** — In Settings → Cabina
-5. **Done!** — The widget appears on your WooCommerce product pages
+5. **Authorise your store address** — In the Cabina Dashboard → Widget & Branding → Authorised domains (Settings → Cabina shows the exact address to add)
+6. **Done!** — The widget appears on your WooCommerce product pages
 
 = Why Cabina =
 
@@ -96,7 +97,7 @@ The plugin is free, and Cabina has a free plan you can start without a credit ca
 
 = Can I customize the widget's appearance? =
 
-Yes! Log in to the Cabina Dashboard (https://cabina.io/dashboard): colors, button text and language are in Widget & Branding, and the garments customers can try on are in Garment Views.
+Yes! Log in to the Cabina Dashboard (https://www.cabina.io/dashboard): colors, button text and language are in Widget & Branding, and the garments customers can try on are in Garment Views.
 
 = Do I need to update the plugin when new features are released? =
 
@@ -122,6 +123,11 @@ Yes. The plugin uses standard WooCommerce hooks. If your theme does not support 
 4. The Cabina Dashboard, where you customize the widget
 
 == Changelog ==
+
+= 1.3.6 =
+
+* Settings → Cabina: the link to the Cabina Dashboard works again, step 1 links to account creation and login, and a new step shows the exact store address to add to "Authorised domains" (without it the button does not appear)
+* Widget: if the "Add to cart" block appears after the page has loaded, the try-on button moves right under it instead of staying at the bottom of the page
 
 = 1.3.5 =
 

@@ -393,17 +393,44 @@ class Cabina_Settings {
 
 			<div class="card" style="max-width: 100%; padding: 10px 20px; margin: 20px 0 20px 0;">
 				<h2><?php echo esc_html__('How it works', 'cabina'); ?></h2>
+				<?php
+				// Origine del negozio, già nella forma dei «Domini autorizzati»:
+				// senza, il widget resta spento senza avviso (20/11/2026).
+				$cabina_parts  = wp_parse_url(home_url());
+				$cabina_origin = (isset($cabina_parts['scheme'], $cabina_parts['host']) ? $cabina_parts['scheme'] . '://' . strtolower($cabina_parts['host']) : '')
+					. (isset($cabina_parts['port']) ? ':' . (int) $cabina_parts['port'] : '');
+				?>
 				<ol>
-					<li><?php echo esc_html__('Log in to your Cabina Dashboard, open Installation and generate your API key. It is shown only once: copy it right away.', 'cabina'); ?></li>
+					<li>
+						<?php
+						printf(
+							/* translators: %1$s / %2$s: opening and closing link tag to the Cabina login page */
+							esc_html__('%1$sCreate your free Cabina account or log in%2$s, open Installation and generate your API key. It is shown only once: copy it right away.', 'cabina'),
+							'<a href="https://www.cabina.io/login" target="_blank" rel="noopener noreferrer">',
+							'</a>'
+						);
+						?>
+					</li>
 					<li><?php echo esc_html__('Paste the API key below and click "Save changes".', 'cabina'); ?></li>
+					<li>
+						<?php
+						printf(
+							/* translators: %1$s / %2$s: opening and closing link tag to the Widget page of the Cabina Dashboard; %3$s: the store address */
+							esc_html__('In the Cabina Dashboard, open %1$sWidget & Branding%2$s and add this address to "Authorised domains": %3$s. Without it the button does not appear.', 'cabina'),
+							'<a href="https://www.cabina.io/dashboard/widget" target="_blank" rel="noopener noreferrer">',
+							'</a>',
+							'<code>' . esc_html($cabina_origin) . '</code>'
+						);
+						?>
+					</li>
 					<li><?php echo esc_html__('Visit a product page of your store: the try-on button will appear automatically.', 'cabina'); ?></li>
 				</ol>
 				<p>
 					<?php
 					printf(
 						/* translators: %1$s / %2$s: opening and closing link tag to the dashboard */
-						esc_html__('Need help? Visit the %1$sCabina Dashboard%2$s to manage categories, colors and the widget appearance.', 'cabina'),
-						'<a href="https://cabina.io/dashboard" target="_blank" rel="noopener noreferrer">',
+						esc_html__('Need help? Visit the %1$sCabina Dashboard%2$s to manage colors, size charts and the widget appearance. If you change your store address, add the new one to the authorised domains.', 'cabina'),
+						'<a href="https://www.cabina.io/dashboard" target="_blank" rel="noopener noreferrer">',
 						'</a>'
 					);
 					?>

@@ -1264,6 +1264,20 @@ function sorvegliaBottone(config: WidgetPublicConfig): void {
     // `properties[_cabina]` sparirebbe e nessuno lo rimetterebbe (review
     // Opus 07/10). Costa una `querySelector` per batch, solo dopo una prova.
     if (attribuzioneDaRimettere()) rimettiAttribuzione();
+    // 19/11/2026 — Wix disegna il blocco d'acquisto DOPO il nostro avvio: il
+    // pulsante finiva sul body (sotto il footer) e lì restava. Quando il blocco
+    // compare, lo si sposta accanto — lo stesso nodo, così i listener restano.
+    if (bottoneIniettato?.isConnected && bottoneIniettato.parentElement === document.body
+        && !document.querySelector(`[${BUTTON_TARGET_ATTR}]`)) {
+      const ancora = trovaAncora();
+      // Un'ancora figlia diretta del body lascerebbe il pulsante nel body: a ogni
+      // mutazione lo si sposterebbe di nuovo, all'infinito (rilievo Kilo, #447).
+      if (ancora && ancora.parentElement !== document.body && !bottoneIniettato.contains(ancora)) {
+        ancora.insertAdjacentElement('afterend', bottoneIniettato);
+        stileNelBlocco(bottoneIniettato);
+      }
+      return;
+    }
     if (timerReinserimento || !bottoneIniettato || bottoneIniettato.isConnected) return;
     // Rimandato di un giro: un ridisegno a più passi potrebbe non aver ancora
     // rimesso il blocco d'acquisto, e reinserire subito finirebbe sul body
@@ -1286,25 +1300,37 @@ function sorvegliaBottone(config: WidgetPublicConfig): void {
   osservatoreBottone = osservatore;
 }
 
+/** Il primo punto d'aggancio noto presente nella pagina, dal più specifico. */
+function trovaAncora(): HTMLElement | null {
+  for (const selector of BUTTON_ANCHORS) {
+    try {
+      const el = document.querySelector(selector) as HTMLElement | null;
+      if (el) return el;
+    } catch {
+      // selettore non supportato dal browser — passa al prossimo
+    }
+  }
+  return null;
+}
+
+/** Dentro il blocco d'acquisto il pulsante è uno della fila «Add to Cart /
+ *  Buy Now»: largo come loro (06/09/2026, demo Wix — prima lo faceva a mano lo
+ *  snippet Custom Code; il tema Cabina lo fa dal suo CSS). */
+function stileNelBlocco(button: HTMLElement): void {
+  button.style.margin = '';
+  button.style.marginTop = '12px';
+  button.style.display = 'block';
+  button.style.width = '100%';
+  button.style.boxSizing = 'border-box';
+}
+
 function injectButton(config: WidgetPublicConfig): void {
   if (document.querySelector('[data-cabina-widget-btn]')) return;
 
   // `data-cabina-target` è la scelta esplicita del merchant e vince su tutto:
   // lì il pulsante va DENTRO, non accanto.
   const explicitTarget = document.querySelector(`[${BUTTON_TARGET_ATTR}]`) as HTMLElement | null;
-  const anchor = explicitTarget
-    ? null
-    : BUTTON_ANCHORS.reduce<HTMLElement | null>(
-        (found, selector) => {
-          if (found) return found;
-          try {
-            return document.querySelector(selector) as HTMLElement | null;
-          } catch {
-            return null; // selettore non supportato dal browser — passa al prossimo
-          }
-        },
-        null,
-      );
+  const anchor = explicitTarget ? null : trovaAncora();
 
   const container = explicitTarget ?? anchor?.parentElement ?? document.body;
 
@@ -1381,13 +1407,7 @@ function injectButton(config: WidgetPublicConfig): void {
     button.style.margin = '16px auto';
     button.style.display = 'block';
   } else {
-    // Dentro il blocco d'acquisto il pulsante è uno della fila «Add to Cart /
-    // Buy Now»: largo come loro (06/09/2026, demo Wix — prima lo faceva a
-    // mano lo snippet Custom Code; il tema Cabina lo fa dal suo CSS).
-    button.style.marginTop = '12px';
-    button.style.display = 'block';
-    button.style.width = '100%';
-    button.style.boxSizing = 'border-box';
+    stileNelBlocco(button);
   }
 
   bottoneIniettato = button;

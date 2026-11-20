@@ -43,6 +43,10 @@ export const BUTTON_ANCHOR_ROWS = [
   { selector: '.single_add_to_cart_button', platform: 'WooCommerce' },
   { selector: '.product-add-to-cart', platform: 'PrestaShop' },
   { selector: '#add-to-cart-or-refresh', platform: 'PrestaShop' },
+  // Wix Stores — la fila «Aggiungi al carrello / Compra ora» (19/11/2026). Serve quando il Site Plugin
+  // `cabina-prova` non è nello slot (slot occupato da un'altra app di try-on): prima il pulsante finiva
+  // sotto il footer. Visto uguale su tre negozi (pulsante `add-to-cart` o `buy-now-button` dentro).
+  { selector: '[data-hook="buy-now-button-container-first-row"]', platform: 'Wix' },
 ] as const;
 
 /** Solo i selettori, nell'ordine: e' cio' che serve a `injectButton`. */

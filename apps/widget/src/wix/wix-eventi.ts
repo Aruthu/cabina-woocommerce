@@ -1,9 +1,10 @@
 /**
  * Script Wix di Cabina (story 14.2): ascolta il carrello per collegare gli
  * ordini alle prove. Servito da `https://www.cabina.io/wix-eventi.js` e
- * caricato dal frammento dell'embedded script dell'app, ACCANTO al widget:
+ * caricato da un embedded script dell'app tutto suo (`cabina-eventi`, tipo
+ * Analytics, dal 19/11/2026; prima stava nel frammento del widget):
  *
- *   <script type="module" accesstoken="true" src="https://www.cabina.io/wix-eventi.js"></script>
+ *   <script type="module" accesstoken="true" src="https://www.cabina.io/wix-eventi.js" data-api-key="{{apiKey}}"></script>
  *
  * Perché un file a parte e non dentro il widget (decisione di Arou, 09/11):
  * l'unica strada documentata da Wix per sentire `AddToCart` e
@@ -29,19 +30,29 @@ const client = createClient({ auth: site.auth(), host: site.host({ applicationId
 // Wix lo chiede agli script con `accesstoken="true"` (T0: senza, il client non parte).
 export const injectAccessTokenFunction = client.auth.getAccessTokenInjector();
 
+// 19/11/2026 — su un sito passato dalla 3.x alla v4 lo script arriva DUE volte
+// (il vecchio frammento del widget, scritto senza componentId, resta accanto al
+// nuovo embed `cabina-eventi`): due ascoltatori = ogni legame mandato due volte.
+// Come `window.__cabinaCaricato` nel widget, la seconda copia non ascolta.
+const giaAttivo = window.__cabinaWix === true;
 window.__cabinaWix = true;
 
 /**
- * La chiave del merchant sta sullo `<script>` del widget, nello stesso
- * frammento (`data-api-key="{{apiKey}}"`); uno script a moduli non ha
- * `document.currentScript` per averne una sua.
+ * La chiave del merchant. Dal 19/11/2026 questo script ha un embed suo
+ * (`cabina-eventi`, Analytics) col proprio `data-api-key`; i siti fermi a una
+ * versione precedente dell'app lo caricano ancora nel frammento del widget, e
+ * lì la chiave sta sullo `<script>` del widget. Uno script a moduli non ha
+ * `document.currentScript`: lo si cerca per `src`.
  */
 function widget(): { apiKey: string; base: string } | null {
-  const tag = document.querySelector<HTMLScriptElement>('script[src*="widget.iife.js"]');
-  if (!tag?.src) return null;
-  const sorgente = new URL(tag.src);
-  const apiKey = tag.dataset.apiKey ?? sorgente.searchParams.get('cabina_api_key') ?? '';
-  return apiKey ? { apiKey, base: tag.dataset.apiUrl ?? sorgente.origin } : null;
+  for (const sel of ['script[src*="wix-eventi.js"][data-api-key]', 'script[src*="widget.iife.js"]']) {
+    const tag = document.querySelector<HTMLScriptElement>(sel);
+    if (!tag?.src) continue;
+    const sorgente = new URL(tag.src);
+    const apiKey = tag.dataset.apiKey ?? sorgente.searchParams.get('cabina_api_key') ?? '';
+    if (apiKey) return { apiKey, base: tag.dataset.apiUrl ?? sorgente.origin };
+  }
+  return null;
 }
 
 function invia(legame: Legame): void {
@@ -56,10 +67,21 @@ function invia(legame: Legame): void {
   }).catch(() => {});
 }
 
-analytics.registerEventListener((nome: string, dati: unknown) => {
+if (giaAttivo) {
+  console.warn('[cabina] warn=WIX_EVENTI_GIA_CARICATO — seconda copia di wix-eventi.js ignorata');
+} else {
   try {
-    gestisciEventoWix(nome, dati, { pagina: location.pathname, url: location.href, invia });
-  } catch {
-    // Un errore qui non deve mai toccare il sito del merchant.
+    analytics.registerEventListener((nome: string, dati: unknown) => {
+      try {
+        gestisciEventoWix(nome, dati, { pagina: location.pathname, url: location.href, invia });
+      } catch {
+        // Un errore qui non deve mai toccare il sito del merchant.
+      }
+    });
+  } catch (err) {
+    // Nessun ascoltatore: il segnale non deve dire il contrario (il widget smette
+    // di annotare le prove, una seconda copia può riprovare) — rilievi Kilo, #451.
+    window.__cabinaWix = false;
+    console.warn('[cabina] warn=WIX_EVENTI_REGISTRAZIONE_FALLITA — ordini non collegati alle prove su questa pagina', err);
   }
-});
+}

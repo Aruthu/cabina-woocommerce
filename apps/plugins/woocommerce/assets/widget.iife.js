@@ -3693,7 +3693,11 @@
     { selector: "form.cart", platform: "WooCommerce" },
     { selector: ".single_add_to_cart_button", platform: "WooCommerce" },
     { selector: ".product-add-to-cart", platform: "PrestaShop" },
-    { selector: "#add-to-cart-or-refresh", platform: "PrestaShop" }
+    { selector: "#add-to-cart-or-refresh", platform: "PrestaShop" },
+    // Wix Stores — la fila «Aggiungi al carrello / Compra ora» (19/11/2026). Serve quando il Site Plugin
+    // `cabina-prova` non è nello slot (slot occupato da un'altra app di try-on): prima il pulsante finiva
+    // sotto il footer. Visto uguale su tre negozi (pulsante `add-to-cart` o `buy-now-button` dentro).
+    { selector: '[data-hook="buy-now-button-container-first-row"]', platform: "Wix" }
   ];
   const BUTTON_ANCHORS = BUTTON_ANCHOR_ROWS.map((r) => r.selector);
   const BUTTON_TARGET_ATTR = "data-cabina-target";
@@ -8903,6 +8907,14 @@
     if (osservatoreBottone || typeof MutationObserver === "undefined") return;
     const osservatore = new MutationObserver(() => {
       if (attribuzioneDaRimettere()) rimettiAttribuzione();
+      if (bottoneIniettato?.isConnected && bottoneIniettato.parentElement === document.body && !document.querySelector(`[${BUTTON_TARGET_ATTR}]`)) {
+        const ancora = trovaAncora();
+        if (ancora && ancora.parentElement !== document.body && !bottoneIniettato.contains(ancora)) {
+          ancora.insertAdjacentElement("afterend", bottoneIniettato);
+          stileNelBlocco(bottoneIniettato);
+        }
+        return;
+      }
       if (timerReinserimento || !bottoneIniettato || bottoneIniettato.isConnected) return;
       timerReinserimento = setTimeout(() => {
         timerReinserimento = null;
@@ -8920,20 +8932,27 @@
     }
     osservatoreBottone = osservatore;
   }
+  function trovaAncora() {
+    for (const selector of BUTTON_ANCHORS) {
+      try {
+        const el = document.querySelector(selector);
+        if (el) return el;
+      } catch {
+      }
+    }
+    return null;
+  }
+  function stileNelBlocco(button) {
+    button.style.margin = "";
+    button.style.marginTop = "12px";
+    button.style.display = "block";
+    button.style.width = "100%";
+    button.style.boxSizing = "border-box";
+  }
   function injectButton(config) {
     if (document.querySelector("[data-cabina-widget-btn]")) return;
     const explicitTarget = document.querySelector(`[${BUTTON_TARGET_ATTR}]`);
-    const anchor = explicitTarget ? null : BUTTON_ANCHORS.reduce(
-      (found, selector) => {
-        if (found) return found;
-        try {
-          return document.querySelector(selector);
-        } catch {
-          return null;
-        }
-      },
-      null
-    );
+    const anchor = explicitTarget ? null : trovaAncora();
     const container = explicitTarget ?? anchor?.parentElement ?? document.body;
     const button = document.createElement("button");
     button.type = "button";
@@ -8977,10 +8996,7 @@
       button.style.margin = "16px auto";
       button.style.display = "block";
     } else {
-      button.style.marginTop = "12px";
-      button.style.display = "block";
-      button.style.width = "100%";
-      button.style.boxSizing = "border-box";
+      stileNelBlocco(button);
     }
     bottoneIniettato = button;
     rimettiAttribuzione();
