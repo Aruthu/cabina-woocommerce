@@ -54,7 +54,8 @@
     "fit": "Ajuste",
     "fit_fitted": "Ajustado",
     "fit_regular": "Normal",
-    "fit_relaxed": "Holgado"
+    "fit_relaxed": "Holgado",
+    "fit_hint": "Cambia la talla recomendada: Ajustado una talla menos, Holgado una más. Elígelo con atención."
   },
   "rendering": {
     "loading": "Procesando...",

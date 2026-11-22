@@ -5,7 +5,7 @@ Requires at least: 6.5
 Requires Plugins: woocommerce
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 1.3.6
+Stable tag: 1.3.7
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -20,14 +20,14 @@ With the virtual try-on, your customers can:
 * **Try on your garments virtually** using their own photo, or on one of 40 preset models
 * **See themselves wearing the garment** in a photorealistic AI-generated image
 * **Try up to three garments together** — a full outfit in one image
-* **Get a size recommendation** based on their measurements and on your size chart, with a fit preference (fitted, regular, relaxed)
+* **Get a size recommendation** based on their measurements and on your size chart, with a fit preference (fitted, regular, relaxed) that the shopper chooses before the try-on: fitted is one size down, relaxed one size up
 * **Rotate and zoom** to see every detail
 
 **Zero code required.** Install, paste your API key, and the virtual try-on button appears automatically on your WooCommerce product pages.
 
 = Virtual try-on and size recommendation, together =
 
-The virtual try-on shows how the garment looks on the shopper; the size recommendation tells them which size to order. Cabina reads the size chart you enter in the Cabina Dashboard, in centimetres, and compares it with the shopper's measurements: a customer who is between two sizes gets the answer before adding to cart. The size recommendation also works without a photo, from height and weight.
+The virtual try-on shows how the garment looks on the shopper; the size recommendation tells them which size to order. Cabina reads the size chart you enter in the Cabina Dashboard, in centimetres, and compares it with the shopper's measurements: a customer who is between two sizes gets the answer before adding to cart, and a measurement up to 2 cm outside a size still counts as inside it. The size recommendation also works without a photo, from height and weight.
 
 = How it works =
 
@@ -123,6 +123,12 @@ Yes. The plugin uses standard WooCommerce hooks. If your theme does not support 
 4. The Cabina Dashboard, where you customize the widget
 
 == Changelog ==
+
+= 1.3.7 =
+
+* Widget: shoppers now choose the fit (Fitted, Regular or Relaxed) before the try-on; nothing is preselected, and a line under the choice explains that it changes the recommended size
+* Size recommendation: Fitted is always one size down and Relaxed one size up from the size given by the measurements (before, only near the boundary between two sizes)
+* Size recommendation: a measurement up to 2 cm outside a size in your chart still counts as inside it, so the shopper gets one size instead of "between two sizes" (shoes excluded)
 
 = 1.3.6 =
 

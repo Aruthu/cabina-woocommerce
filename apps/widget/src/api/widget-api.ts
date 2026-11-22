@@ -22,14 +22,22 @@ async function fetchWithTimeout(url: string, options: RequestInit = {}, timeoutM
   }
 }
 
-export async function fetchWidgetConfig(
-  apiKey: string,
-  baseUrl = ''
-): Promise<WidgetPublicConfig | null> {
+/**
+ * Attesa prima del secondo tentativo (20/11/2026). Quel giorno Supabase si è
+ * bloccato per due finestre di pochi minuti (risposte ferme 10 s, poi 555): un
+ * cliente di Valetta ha visto la pagina senza il bottone. Un guasto passeggero
+ * si risolve quasi sempre in pochi secondi; un errore del merchant (chiave,
+ * dominio) no, e quello non si ritenta.
+ */
+export const CONFIG_RETRY_DELAY_MS = 3_000;
+
+type TentativoConfig = { config: WidgetPublicConfig | null; transitorio: boolean };
+
+async function tentaConfig(url: string): Promise<TentativoConfig> {
+  let status = 0;
   try {
-    const sanitizedBase = baseUrl.replace(/\/+$/, '');
-    const url = `${sanitizedBase}/api/widget/config?api_key=${encodeURIComponent(apiKey)}`;
     const res = await fetchWithTimeout(url);
+    status = res.status;
     const body: ApiResponse<WidgetPublicConfig> = await res.json().catch((err: unknown) => {
       if (err instanceof SyntaxError) {
         console.error('[widget] error=INVALID_JSON');
@@ -38,21 +46,39 @@ export async function fetchWidgetConfig(
     });
     if (!res.ok || body.error) {
       console.error(`[widget] error=${body.error?.code ?? 'INTERNAL_ERROR'}`);
-      return null;
+      // Solo i 5xx sono guasti del server: un 4xx (chiave, dominio, limite) resta tale.
+      return { config: null, transitorio: res.status >= 500 };
     }
     if (!body.data) {
       console.error('[widget] error=INTERNAL_ERROR');
-      return null;
+      return { config: null, transitorio: false };
     }
-    return body.data;
+    return { config: body.data, transitorio: false };
   } catch (err: unknown) {
     if (err instanceof DOMException && err.name === 'AbortError') {
       console.error('[widget] error=TIMEOUT');
     } else if (!(err instanceof SyntaxError)) {
       console.error('[widget] error=INTERNAL_ERROR');
     }
-    return null;
+    // Rete o timeout: passeggeri. Un corpo non JSON si ritenta solo se lo stato è 5xx
+    // (pagina HTML di un 502/504 di Vercel, o il 555 di Supabase: rilievo Kilo #462);
+    // un JSON rotto con 200 è un difetto, non si ritenta.
+    return { config: null, transitorio: !(err instanceof SyntaxError) || status >= 500 };
   }
+}
+
+export async function fetchWidgetConfig(
+  apiKey: string,
+  baseUrl = '',
+  retryDelayMs = CONFIG_RETRY_DELAY_MS,
+): Promise<WidgetPublicConfig | null> {
+  const sanitizedBase = baseUrl.replace(/\/+$/, '');
+  const url = `${sanitizedBase}/api/widget/config?api_key=${encodeURIComponent(apiKey)}`;
+  const primo = await tentaConfig(url);
+  if (primo.config || !primo.transitorio) return primo.config;
+  // Un solo secondo tentativo: il bottone arriva qualche secondo dopo invece di mai.
+  await new Promise((r) => setTimeout(r, retryDelayMs));
+  return (await tentaConfig(url)).config;
 }
 
 export interface SizeTableResult {
@@ -62,6 +88,10 @@ export interface SizeTableResult {
   category: SizeTableCategory | null;
   /** Per chi è: `kids` = capo da bambino, solo modelle preset minorenni (12/10/2026). */
   audience: SizeTableAudience;
+  /** La tabella vale solo per questo prodotto (URL normalizzato, 20/11/2026); assente/null = per categoria. */
+  prodottoUrl?: string | null;
+  /** `capo` = misure del capo pubblicate per quel prodotto; assente = `corpo`. */
+  misure?: 'corpo' | 'capo';
   data: SizeTableRow[];
 }
 

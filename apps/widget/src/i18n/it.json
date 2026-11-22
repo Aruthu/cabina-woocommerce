@@ -54,7 +54,8 @@
     "fit": "Vestibilità",
     "fit_fitted": "Aderente",
     "fit_regular": "Normale",
-    "fit_relaxed": "Comoda"
+    "fit_relaxed": "Comoda",
+    "fit_hint": "Cambia la taglia consigliata: Aderente una taglia in meno, Comoda una in più. Sceglila con attenzione."
   },
   "rendering": {
     "loading": "Elaborazione in corso...",

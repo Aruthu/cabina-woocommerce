@@ -34,6 +34,8 @@ export interface MeasuresFormStrings {
   fitFitted?: string;
   fitRegular?: string;
   fitRelaxed?: string;
+  /** Riga sotto la vestibilità (22/11/2026): cambia la taglia, va scelta con attenzione. */
+  fitHint?: string;
   /** Riga sotto il peso (15/11/2026). Opzionali per la stessa ragione del piede. */
   weightUnused?: string;
   weightCheckUnit?: string;
@@ -367,7 +369,9 @@ export function createMeasuresForm(
   // «Aderente / Normale / Comoda»: una scelta sola, per vestiti e scarpe. Nasce
   // Normale ogni volta, come le misure (che non si salvano più dal 16/08). Tre
   // bottoni con `aria-pressed` e non un <select>: si vede tutto a colpo d'occhio.
-  let fit: FitPreference = 'regular';
+  // Nessuna preselezione (Arou 22/11/2026): la vestibilità cambia la taglia di una,
+  // va scelta prima di provare e non lasciata su «Normale» senza guardarla.
+  let fit: FitPreference | null = null;
   const fitWrap = document.createElement('div');
   fitWrap.setAttribute('data-cabina-fit', '');
   fitWrap.style.cssText = 'margin:4px 0 12px;';
@@ -403,12 +407,19 @@ export function createMeasuresForm(
     b.addEventListener('click', () => {
       fit = value;
       paintFit();
+      updateConfirmButton();
     });
     fitButtons.push([value, b]);
     fitRow.appendChild(b);
   }
   paintFit();
   fitWrap.appendChild(fitRow);
+  if (strings.fitHint) {
+    const fitHint = document.createElement('div');
+    fitHint.textContent = strings.fitHint;
+    fitHint.style.cssText = 'font-size:12px;color:#6b7280;margin-top:4px;';
+    fitWrap.appendChild(fitHint);
+  }
   container.appendChild(fitWrap);
 
   // ── Bottoni ───────────────────────────────────────────────────────────
@@ -664,17 +675,21 @@ export function createMeasuresForm(
     // qualcosa è in corso. Un solo punto decide: chi confermava a metà
     // rilevamento partiva senza le misure stimate, che arrivavano dopo e
     // andavano perse — e il consiglio taglia peggiorava senza spiegazione.
+    // Spento anche finché non si sceglie la vestibilità (22/11/2026).
     const busy = detecting || submitting;
-    confirmBtn.disabled = busy;
+    const spento = busy || fit === null;
+    confirmBtn.disabled = spento;
     confirmBtn.setAttribute('aria-busy', busy ? 'true' : 'false');
-    confirmBtn.style.opacity = busy ? '0.5' : '1';
-    confirmBtn.style.cursor = busy ? 'progress' : 'pointer';
+    confirmBtn.style.opacity = spento ? '0.5' : '1';
+    confirmBtn.style.cursor = busy ? 'progress' : spento ? 'not-allowed' : 'pointer';
   }
 
   async function handleConfirm(): Promise<void> {
     // Raccoglie i valori presenti — le misure sono opzionali (AC1).
     // La validazione inline dei singoli campi rimane per feedback visivo,
     // ma non blocca più il submit: un campo fuori range si scarta (getCurrentValues).
+    if (fit === null) return;
+    const scelta = fit;
     const values = getCurrentValues();
     submitting = true;
     updateConfirmButton();
@@ -682,7 +697,7 @@ export function createMeasuresForm(
       // Da qui può partire una generazione a pagamento: `onConfirm` risolve il
       // capo della pagina (e attende l'analisi della categoria) prima di avviarla.
       // Spento nel frattempo, o un doppio click ne paga due.
-      await callbacks.onConfirm(values, measureSource, fit);
+      await callbacks.onConfirm(values, measureSource, scelta);
     } finally {
       submitting = false;
       // Il form di solito è già smontato (si passa a un altro step): riaccendere

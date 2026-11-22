@@ -55,6 +55,15 @@ export type SizeTableCategory = z.infer<typeof SizeTableCategorySchema>;
 export const SizeTableAudienceSchema = z.enum(['adult', 'kids']);
 export type SizeTableAudience = z.infer<typeof SizeTableAudienceSchema>;
 
+/**
+ * Cosa misura la tabella (20/11/2026, lettore guide taglie): `corpo` = le
+ * circonferenze della persona (tutte le tabelle di prima), `capo` = le misure
+ * del capo pubblicate dal merchant per QUEL capo. Una tabella `capo` vale solo
+ * col suo prodotto: per altri capi le misure sarebbero di un altro capo.
+ */
+export const SizeTableMisureSchema = z.enum(['corpo', 'capo']);
+export type SizeTableMisure = z.infer<typeof SizeTableMisureSchema>;
+
 /** Singola riga della tabella taglie. */
 export const SizeTableRowSchema = z
   .object({
@@ -125,8 +134,16 @@ export const SizeTableCreateSchema = z
     data: SizeTableDataSchema,
     category: SizeTableCategorySchema.nullable().optional(),
     audience: SizeTableAudienceSchema.default('adult'),
+    /** Link del prodotto per cui vale (normalizzato dal server); assente = per categoria.
+     *  2048 = PRODUCT_URL_MAX_LENGTH, definita più sotto in questo file. */
+    // Vuoto = nessun link (facoltativo per le tabelle del corpo): diventa null, non un errore.
+    prodottoUrl: z.string().trim().max(2048).nullable().optional().transform((v) => v || null),
+    misure: SizeTableMisureSchema.default('corpo'),
   })
   .superRefine((tabella, ctx) => {
+    if (tabella.misure === 'capo' && !tabella.prodottoUrl) {
+      ctx.addIssue({ code: 'custom', path: ['prodottoUrl'], message: 'Il link del prodotto è obbligatorio per le misure del capo' });
+    }
     const soglia = SOGLIA_POLLICI_CM[tabella.audience];
     tabella.data.forEach((riga, i) => {
       for (const campo of CAMPI_POLLICI) {

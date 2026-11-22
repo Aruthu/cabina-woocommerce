@@ -54,7 +54,8 @@
     "fit": "Coupe",
     "fit_fitted": "Ajustée",
     "fit_regular": "Normale",
-    "fit_relaxed": "Ample"
+    "fit_relaxed": "Ample",
+    "fit_hint": "Elle change la taille conseillée : Ajustée une taille en dessous, Ample une taille au-dessus. À choisir avec attention."
   },
   "rendering": {
     "loading": "Traitement en cours...",

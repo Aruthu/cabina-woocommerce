@@ -1,4 +1,5 @@
 import type { Measures, SizeTableRow, SizeTableCategory, SizeTableAudience } from '@cabina/shared';
+import { normalizeProductUrl } from '@cabina/shared';
 import type { GarmentCategory } from '../../state/types';
 
 /** Il peso di ogni dimensione nel calcolo della distanza. */
@@ -30,8 +31,7 @@ export interface SizeRecommendation {
 
 /**
  * Vestibilità scelta dall'acquirente (18/09/2026, Arou): «Aderente / Normale /
- * Comoda». Sposta di UNA taglia al massimo, e solo quando le misure sono entro
- * `FIT_MARGIN_CM` dal confine: fuori da lì la taglia la decidono le misure.
+ * Comoda». Dal 22/11/2026 sposta SEMPRE di una taglia (vedi `applicaVestibilita`).
  */
 export type FitPreference = 'fitted' | 'regular' | 'relaxed';
 
@@ -157,15 +157,15 @@ const CATEGORY_WEIGHT_EXTRA = 0.5; // peso aggiuntivo per le misure rilevanti (m
 const LOOSE_WEIGHT = 0.5;
 
 /**
- * Margine della vestibilità (18/09/2026): «Comoda» sale di taglia solo se una
- * misura che conta per il capo è entro 2 cm dal massimo della sua taglia;
- * «Aderente» scende solo se tutte sono entro 2 cm dal minimo. Una taglia è
- * larga 6–8 cm: 2 cm restano dentro il confine, senza saltare una taglia intera.
+ * Tolleranza delle tabelle (Arou, 20 e 22/11/2026): una misura che esce da una
+ * taglia di 2 cm al massimo conta ancora come dentro. Si usa solo quando nessuna
+ * taglia contiene tutte le misure, e decide solo se UNA taglia le contiene tutte
+ * con la tolleranza (prova del 22/11: vita 82 con la S fino a 80 → S, non «tra S e M»).
  *
  * ⚠️ Non è il «±7 cm» del banco misure: quello è quanto varia la STIMA fra due
  * foto della stessa persona, un rumore da ridurre, non una tolleranza scelta.
  */
-export const FIT_MARGIN_CM = 2;
+export const TOLLERANZA_CM = 2;
 
 type Dimensione = 'height' | 'bust' | 'waist' | 'hips' | 'foot';
 
@@ -203,6 +203,17 @@ function rangeDi(measures: Measures, row: SizeTableRow, d: Dimensione): { v: num
     : d === 'hips' ? [measures.hipsCm, row.hipsMin, row.hipsMax]
     : [measures.footCm ?? 0, row.footMin ?? 0, row.footMax ?? 0];
   return isRangeUnspecified(min, max) ? null : { v, min, max };
+}
+
+/** Tutte le misure che la riga dichiara ci stanno, con `TOLLERANZA_CM` di margine.
+ *  Il piede no (rilievo Kilo, #476): 2 cm sono circa tre numeri di scarpa, e le
+ *  scarpe restano come prima. Su una tabella scarpe la tolleranza non trova nulla. */
+function dentroConTolleranza(measures: Measures, row: SizeTableRow): boolean {
+  if (rangeDi(measures, row, 'foot')) return false;
+  return (['height', 'bust', 'waist', 'hips'] as const).every((d) => {
+    const r = rangeDi(measures, row, d);
+    return !r || (r.v >= r.min - TOLLERANZA_CM && r.v <= r.max + TOLLERANZA_CM);
+  });
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────────
@@ -478,14 +489,14 @@ function saltoAmmesso(da: string, a: string): boolean {
 /**
  * La vestibilità scelta dall'acquirente e il numero «più comoda» delle scarpe.
  *
- * Tre regole, tutte al massimo di UNA taglia:
- *  - **Comoda**: a cavallo sceglie la maggiore; su un match esatto sale solo se
- *    una misura chiave è entro `FIT_MARGIN_CM` dal massimo. Sulle scarpe prende
- *    il numero «più comoda».
- *  - **Aderente**: a cavallo sceglie la minore se nessuna misura chiave la
- *    supera di più di `FIT_MARGIN_CM`; su un match esatto scende solo se TUTTE
- *    le misure chiave sono entro `FIT_MARGIN_CM` dal minimo.
+ * Tre regole, SEMPRE di una taglia (Arou 22/11/2026: la vestibilità pesa sulla
+ * taglia più delle misure — porta XS aderente una giacca da torace 84-87 col suo
+ * 94, M comode polo e maglie; prima si spostava solo entro 2 cm dal confine):
+ *  - **Comoda**: una taglia sopra; a cavallo, la maggiore delle due. Sulle
+ *    scarpe il numero «più comoda».
+ *  - **Aderente**: una taglia sotto; a cavallo, la minore. Le scarpe non scendono.
  *  - **Normale**: il consiglio di base.
+ * Il consiglio delle misure resta come `alternative`, così il badge le mostra tutte e due.
  *
  * Lo `score` resta quello del consiglio di base, anche quando un match esatto
  * diventa «tra due taglie»: dice quanto le misure cadono nella tabella, e la
@@ -512,41 +523,19 @@ function applicaVestibilita(
   }
 
   if (fit === 'regular') return base;
-  const chiave = dimensioniChiave(options?.garment?.category);
   const rigaDi = (size: string) => sizeTable.find((r) => r.size === size);
 
   if (base.confidence === 'between' && base.alternative) {
     const [a, b] = [rigaDi(base.size), rigaDi(base.alternative)];
     if (!a || !b) return base;
     const [minore, maggiore] = upperLimitsSum(a) <= upperLimitsSum(b) ? [a, b] : [b, a];
-    if (fit === 'relaxed') {
-      return { ...base, size: maggiore.size, alternative: minore.size };
-    }
-    const entraNellaMinore = chiave.every((d) => {
-      const r = rangeDi(measures, minore, d);
-      return !r || r.v <= r.max + FIT_MARGIN_CM;
-    });
-    return entraNellaMinore ? { ...base, size: minore.size, alternative: maggiore.size } : base;
+    return fit === 'relaxed'
+      ? { ...base, size: maggiore.size, alternative: minore.size }
+      : { ...base, size: minore.size, alternative: maggiore.size };
   }
 
-  const attuale = rigaDi(base.size);
-  if (!attuale) return base;
-  const range = chiave.map((d) => rangeDi(measures, attuale, d)).filter((r) => r != null);
-  if (range.length === 0) return base;
-
-  if (fit === 'relaxed') {
-    const maggiore = riga(sizeTable, base.size, 1);
-    const alLimite = range.some((r) => r.v >= r.max - FIT_MARGIN_CM);
-    return maggiore && alLimite
-      ? { ...base, size: maggiore.size, confidence: 'between', alternative: base.size }
-      : base;
-  }
-
-  const minore = riga(sizeTable, base.size, -1);
-  const tuttoAlMinimo = range.every((r) => r.v <= r.min + FIT_MARGIN_CM);
-  return minore && tuttoAlMinimo
-    ? { ...base, size: minore.size, confidence: 'between', alternative: base.size }
-    : base;
+  const altra = riga(sizeTable, base.size, fit === 'relaxed' ? 1 : -1);
+  return altra ? { ...base, size: altra.size, confidence: 'between', alternative: base.size } : base;
 }
 
 function consiglioBase(
@@ -590,6 +579,13 @@ function consiglioBase(
       confidence: 'exact',
       score: scoreFrom(Q_EXACT_MULTIPLE, options),
     };
+  }
+
+  // 1b. Nessun match: se UNA sola taglia le contiene tutte con ±2 cm, è quella.
+  const vicine = sizeTable.filter((row) => dentroConTolleranza(measures, row));
+  if (vicine.length === 1) {
+    // Punteggio dei match multipli, non del pieno (rilievo Kilo, #476): ci sta, ma al bordo.
+    return { size: vicine[0]!.size, confidence: 'exact', score: scoreFrom(Q_EXACT_MULTIPLE, options) };
   }
 
   // 2. Nessun match esatto → cerca le due taglie più vicine
@@ -672,6 +668,39 @@ export interface SizeTableCandidate {
   name: string;
   category: SizeTableCategory | null;
   data: SizeTableRow[];
+}
+
+/**
+ * Le tabelle che valgono sulla pagina aperta (20/11/2026, lettore guide taglie).
+ *
+ * Una tabella legata a un prodotto (`prodottoUrl`) vale SOLO su quella pagina e
+ * lì vince su tutte le altre: sono le misure che il merchant ha pubblicato per
+ * quel capo (anche le misure del capo, Felipe; o i numeri di quella scarpa).
+ * Sulle altre pagine non vale mai, nemmeno come ripiego: sono le misure di un
+ * altro capo. Senza tabelle del prodotto restano quelle per categoria, come prima.
+ */
+export function perQuestoProdotto<T extends { prodottoUrl?: string | null }>(
+  tables: readonly T[],
+  urlPagina: string,
+): T[] {
+  // Il prodotto è lo stesso con qualunque `?variant=` (il colore scelto su Shopify, che la
+  // normalizzazione conserva), sia nell'indirizzo della pagina sia nel link salvato dal
+  // merchant (rilievo Kilo #463). Solo `variant`: su PrestaShop e su Woo senza permalink
+  // il prodotto È nella query (`?id_product=12`), toglierla li renderebbe tutti uguali.
+  const pagina = senzaVariante(normalizeProductUrl(urlPagina));
+  const delProdotto = tables.filter((t) => t.prodottoUrl && senzaVariante(t.prodottoUrl) === pagina);
+  return delProdotto.length > 0 ? delProdotto : tables.filter((t) => !t.prodottoUrl);
+}
+
+/** Chiave del prodotto senza il parametro `variant` (le altre query restano). */
+function senzaVariante(chiave: string): string {
+  try {
+    const u = new URL(chiave);
+    u.searchParams.delete('variant');
+    return normalizeProductUrl(u.toString());
+  } catch {
+    return chiave;
+  }
 }
 
 /**

@@ -54,7 +54,8 @@
     "fit": "Caimento",
     "fit_fitted": "Justo",
     "fit_regular": "Normal",
-    "fit_relaxed": "Folgado"
+    "fit_relaxed": "Folgado",
+    "fit_hint": "Muda o tamanho recomendado: Justo um tamanho a menos, Folgado um a mais. Escolha com atenção."
   },
   "rendering": {
     "loading": "Processando...",

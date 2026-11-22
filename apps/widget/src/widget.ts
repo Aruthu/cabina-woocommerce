@@ -20,7 +20,7 @@ import { createFotoScelta, dimenticaModellaScelta, segnaModellaScelta, createMod
 import { KIDS_MODELS, KIDS_AGE_BANDS, KIDS_GENDER_LABEL_KEYS, type PresetModel } from './features/model-gallery/presets';
 import { createGarmentSelect, resolvePageGarmentParams, type PageGarmentParams } from './features/garment-select/garment-select';
 import { showTryOnOverlay, removeTryOnOverlay, updateSizeBadge, setShowSizeScore } from './features/tryon/tryon-overlay';
-import { recommendFromTables, stimaPiedeDaAltezza, perChiIlCapo } from './features/size/size-recommendation';
+import { recommendFromTables, stimaPiedeDaAltezza, perChiIlCapo, perQuestoProdotto } from './features/size/size-recommendation';
 import { fetchSizeTables, type SizeTableResult } from './api/widget-api';
 import {
   segnaProvaNelForm,
@@ -115,6 +115,10 @@ export function __resetWidgetForTesting(): void {
   garmentAnalysisDone = Promise.resolve();
   garmentAnalysisPending = false;
   analisiCapoDaAvviare = null;
+  chiaviAnalisi = null;
+  widgetModal = null; // una modale di un test precedente terrebbe il suo onClose
+  modalEscHandler = null;
+  paginaAnalizzata = null;
   sizeTables = undefined;
   sizeTablesDone = Promise.resolve();
   rispostaPerChi = undefined;
@@ -162,6 +166,12 @@ let garmentAnalysisPending = false;
 // pagina prodotto (valetta.fr: decine al giorno, sei aperture). Qui chiave e URL
 // dell'API fino a quel click; `null` = già partita o niente da analizzare.
 let analisiCapoDaAvviare: { apiKey: string; baseUrl: string } | null = null;
+// 20/11/2026 — Wix cambia prodotto senza ricaricare la pagina: l'analisi vale per
+// il percorso in cui è partita. Al click su un percorso diverso si rifà, e un
+// risultato in ritardo della pagina vecchia non sovrascrive quello nuovo.
+let chiaviAnalisi: { apiKey: string; baseUrl: string } | null = null;
+let paginaAnalizzata: string | null = null;
+let giroAnalisi = 0;
 // Le tabelle taglie del merchant, chieste all'avvio come l'analisi del capo
 // (12/10/2026): lo step `photo` deve sapere PRIMA di disegnarsi se il capo è da
 // bambino, perché in quel caso non mostra il caricamento foto. `undefined` =
@@ -765,6 +775,7 @@ function renderState(button: HTMLElement): void {
           fitFitted: senzaChiave(getLocaleString('form.fit_fitted')),
           fitRegular: senzaChiave(getLocaleString('form.fit_regular')),
           fitRelaxed: senzaChiave(getLocaleString('form.fit_relaxed')),
+          fitHint: senzaChiave(getLocaleString('form.fit_hint')),
           // Riga sotto il peso (15/11/2026): stessi fallback del piede.
           weightUnused: senzaChiave(getLocaleString('form.weight_unused')),
           weightCheckUnit: senzaChiave(getLocaleString('form.weight_check_unit')),
@@ -1191,7 +1202,10 @@ function renderState(button: HTMLElement): void {
           if (footEstimated) measuresForCalc.footCm = stimaPiedeDaAltezza(measuresForCalc.heightCm!);
           // Le tabelle sono già arrivate all'avvio (12/10/2026): si richiedono
           // solo se quella chiamata era fallita (rilievo di Kilo sulla #317).
-          (sizeTables ? Promise.resolve(sizeTables) : fetchSizeTables(apiKeyForCalc, baseUrlForCalc)).then((tables) => {
+          (sizeTables
+            ? Promise.resolve(sizeTables)
+            : fetchSizeTables(apiKeyForCalc, baseUrlForCalc).then((t) => t && perQuestoProdotto(t, window.location.href))
+          ).then((tables) => {
             if (tables && tables.length > 0) {
               // La tabella del capo, non la prima: su un pantalone «40», non «M».
               const scelta = recommendFromTables(measuresForCalc, tables, {
@@ -1643,7 +1657,8 @@ function startGarmentAnalysis(apiKey: string, baseUrl: string): void {
   // (12/10/2026). `null` in errore: il capo passa per adulto, come prima.
   sizeTables = undefined;
   sizeTablesDone = fetchSizeTables(apiKey, baseUrl)
-    .then((tables) => { sizeTables = tables; })
+    // Solo le tabelle che valgono su questa pagina: quella del prodotto, se c'è (20/11/2026).
+    .then((tables) => { sizeTables = tables && perQuestoProdotto(tables, window.location.href); })
     .catch(() => { sizeTables = null; });
   // Le foto delle varianti (Shopify): la prova segue il colore scelto dopo
   // l'apertura della pagina. Senza attesa, perché serve solo al click.
@@ -1652,14 +1667,29 @@ function startGarmentAnalysis(apiKey: string, baseUrl: string): void {
   garmentAnalysis = null;
   garmentAnalysisDone = Promise.resolve();
   analisiCapoDaAvviare = { apiKey, baseUrl };
+  chiaviAnalisi = analisiCapoDaAvviare;
+  paginaAnalizzata = null;
+  // Un'analisi ancora in volo da un avvio precedente non deve più scrivere (rilievo Kilo #459).
+  giroAnalisi++;
+  garmentAnalysisPending = false;
 }
 
-/** Al primo click sul pulsante: l'analisi del capo, una volta per pagina. */
+/** Solo per Vitest: il click sul pulsante con la cabina chiusa chiama questa. */
+export const __avviaAnalisiCapoForTesting = (): void => avviaAnalisiCapo();
+
+/** Al primo click sul pulsante: l'analisi del capo, una volta per pagina (per percorso). */
 function avviaAnalisiCapo(): void {
+  const pagina = String(window.location.pathname);
+  if (!analisiCapoDaAvviare && chiaviAnalisi && paginaAnalizzata !== null && paginaAnalizzata !== pagina) {
+    analisiCapoDaAvviare = chiaviAnalisi;
+    garmentAnalysis = null;
+  }
   if (!analisiCapoDaAvviare) return;
   const { apiKey, baseUrl } = analisiCapoDaAvviare;
   analisiCapoDaAvviare = null;
-  if (!extractProductImageUrl()) return;
+  paginaAnalizzata = pagina;
+  const giro = ++giroAnalisi;
+  if (!extractProductImageUrl()) { garmentAnalysisPending = false; garmentAnalysisDone = Promise.resolve(); return; }
   garmentAnalysisPending = true;
   garmentAnalysisDone = (async () => {
     // 10/11/2026 (Arou) — una foto col capo piegato si scarta: il Floral Tea Dress
@@ -1667,19 +1697,22 @@ function avviaAnalisiCapo(): void {
     // seguente della galleria; senza foto intere `extractProductImageUrl` dà null
     // e la cabina chiede di scegliere un capo. Tetto: 4 analisi per pagina.
     for (let i = 0; i < 4; i++) {
+      if (giro !== giroAnalisi) return;
       const url = extractProductImageUrl();
       if (!url) { garmentAnalysis = null; return; }
       const result = await analyzeGarmentFromUrl(apiKey, url, baseUrl);
+      if (giro !== giroAnalisi) return; // il prodotto è cambiato nel frattempo
       garmentAnalysis = result;
       if (!capoPiegato(result)) return;
       scartaFotoCapo(url);
     }
     // Quattro foto piegate: niente prova con la foto della pagina (rilievo Kilo #413).
+    if (giro !== giroAnalisi) return;
     garmentAnalysis = null;
     rifiutaFotoCapo();
   })()
-    .catch(() => { garmentAnalysis = null; })
-    .finally(() => { garmentAnalysisPending = false; });
+    .catch(() => { if (giro === giroAnalisi) garmentAnalysis = null; })
+    .finally(() => { if (giro === giroAnalisi) garmentAnalysisPending = false; });
 }
 
 /** Le scarpe e gli accessori non si piegano: lì `fullyVisible` non decide nulla. */

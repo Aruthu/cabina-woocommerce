@@ -3595,6 +3595,7 @@
   });
   const SizeTableCategorySchema = enumType(["top", "bottom", "dress", "outerwear", "footwear"]);
   const SizeTableAudienceSchema = enumType(["adult", "kids"]);
+  const SizeTableMisureSchema = enumType(["corpo", "capo"]);
   const SizeTableRowSchema = objectType({
     size: stringType().min(1, "La taglia è obbligatoria").max(20),
     heightMin: numberType().int().min(0).max(300),
@@ -3633,8 +3634,16 @@
     name: stringType().min(1).max(100),
     data: SizeTableDataSchema,
     category: SizeTableCategorySchema.nullable().optional(),
-    audience: SizeTableAudienceSchema.default("adult")
+    audience: SizeTableAudienceSchema.default("adult"),
+    /** Link del prodotto per cui vale (normalizzato dal server); assente = per categoria.
+     *  2048 = PRODUCT_URL_MAX_LENGTH, definita più sotto in questo file. */
+    // Vuoto = nessun link (facoltativo per le tabelle del corpo): diventa null, non un errore.
+    prodottoUrl: stringType().trim().max(2048).nullable().optional().transform((v) => v || null),
+    misure: SizeTableMisureSchema.default("corpo")
   }).superRefine((tabella, ctx) => {
+    if (tabella.misure === "capo" && !tabella.prodottoUrl) {
+      ctx.addIssue({ code: "custom", path: ["prodottoUrl"], message: "Il link del prodotto è obbligatorio per le misure del capo" });
+    }
     const soglia = SOGLIA_POLLICI_CM[tabella.audience];
     tabella.data.forEach((riga2, i) => {
       for (const campo of CAMPI_POLLICI) {
@@ -3738,11 +3747,12 @@
       clearTimeout(timer);
     }
   }
-  async function fetchWidgetConfig(apiKey2, baseUrl = "") {
+  const CONFIG_RETRY_DELAY_MS = 3e3;
+  async function tentaConfig(url) {
+    let status = 0;
     try {
-      const sanitizedBase = baseUrl.replace(/\/+$/, "");
-      const url = `${sanitizedBase}/api/widget/config?api_key=${encodeURIComponent(apiKey2)}`;
       const res = await fetchWithTimeout(url);
+      status = res.status;
       const body = await res.json().catch((err) => {
         if (err instanceof SyntaxError) {
           console.error("[widget] error=INVALID_JSON");
@@ -3751,21 +3761,29 @@
       });
       if (!res.ok || body.error) {
         console.error(`[widget] error=${body.error?.code ?? "INTERNAL_ERROR"}`);
-        return null;
+        return { config: null, transitorio: res.status >= 500 };
       }
       if (!body.data) {
         console.error("[widget] error=INTERNAL_ERROR");
-        return null;
+        return { config: null, transitorio: false };
       }
-      return body.data;
+      return { config: body.data, transitorio: false };
     } catch (err) {
       if (err instanceof DOMException && err.name === "AbortError") {
         console.error("[widget] error=TIMEOUT");
       } else if (!(err instanceof SyntaxError)) {
         console.error("[widget] error=INTERNAL_ERROR");
       }
-      return null;
+      return { config: null, transitorio: !(err instanceof SyntaxError) || status >= 500 };
     }
+  }
+  async function fetchWidgetConfig(apiKey2, baseUrl = "", retryDelayMs = CONFIG_RETRY_DELAY_MS) {
+    const sanitizedBase = baseUrl.replace(/\/+$/, "");
+    const url = `${sanitizedBase}/api/widget/config?api_key=${encodeURIComponent(apiKey2)}`;
+    const primo = await tentaConfig(url);
+    if (primo.config || !primo.transitorio) return primo.config;
+    await new Promise((r) => setTimeout(r, retryDelayMs));
+    return (await tentaConfig(url)).config;
   }
   async function fetchSizeTables(apiKey2, baseUrl = "") {
     try {
@@ -5218,7 +5236,7 @@
       }
       container.appendChild(wrapper);
     }
-    let fit = "regular";
+    let fit = null;
     const fitWrap = document.createElement("div");
     fitWrap.setAttribute("data-cabina-fit", "");
     fitWrap.style.cssText = "margin:4px 0 12px;";
@@ -5254,12 +5272,19 @@
       b.addEventListener("click", () => {
         fit = value;
         paintFit();
+        updateConfirmButton();
       });
       fitButtons.push([value, b]);
       fitRow.appendChild(b);
     }
     paintFit();
     fitWrap.appendChild(fitRow);
+    if (strings.fitHint) {
+      const fitHint = document.createElement("div");
+      fitHint.textContent = strings.fitHint;
+      fitHint.style.cssText = "font-size:12px;color:#6b7280;margin-top:4px;";
+      fitWrap.appendChild(fitHint);
+    }
     container.appendChild(fitWrap);
     const buttonRow = document.createElement("div");
     buttonRow.style.cssText = "display:flex;gap:8px;margin-top:8px;";
@@ -5440,17 +5465,20 @@
     }
     function updateConfirmButton() {
       const busy = detecting || submitting;
-      confirmBtn.disabled = busy;
+      const spento = busy || fit === null;
+      confirmBtn.disabled = spento;
       confirmBtn.setAttribute("aria-busy", busy ? "true" : "false");
-      confirmBtn.style.opacity = busy ? "0.5" : "1";
-      confirmBtn.style.cursor = busy ? "progress" : "pointer";
+      confirmBtn.style.opacity = spento ? "0.5" : "1";
+      confirmBtn.style.cursor = busy ? "progress" : spento ? "not-allowed" : "pointer";
     }
     async function handleConfirm() {
+      if (fit === null) return;
+      const scelta = fit;
       const values = getCurrentValues();
       submitting = true;
       updateConfirmButton();
       try {
-        await callbacks.onConfirm(values, measureSource, fit);
+        await callbacks.onConfirm(values, measureSource, scelta);
       } finally {
         submitting = false;
         if (container.isConnected) updateConfirmButton();
@@ -7768,7 +7796,7 @@
   const SCORE_SPAN = 18;
   const CATEGORY_WEIGHT_EXTRA = 0.5;
   const LOOSE_WEIGHT = 0.5;
-  const FIT_MARGIN_CM = 2;
+  const TOLLERANZA_CM = 2;
   const MISURA = { height: "heightCm", bust: "bustCm", waist: "waistCm", hips: "hipsCm", foot: "footCm" };
   const COLONNE = {
     height: ["heightMin", "heightMax"],
@@ -7794,6 +7822,13 @@
   function rangeDi(measures, row, d) {
     const [v, min, max] = d === "height" ? [measures.heightCm, row.heightMin, row.heightMax] : d === "bust" ? [measures.bustCm, row.bustMin, row.bustMax] : d === "waist" ? [measures.waistCm, row.waistMin, row.waistMax] : d === "hips" ? [measures.hipsCm, row.hipsMin, row.hipsMax] : [measures.footCm ?? 0, row.footMin ?? 0, row.footMax ?? 0];
     return isRangeUnspecified(min, max) ? null : { v, min, max };
+  }
+  function dentroConTolleranza(measures, row) {
+    if (rangeDi(measures, row, "foot")) return false;
+    return ["height", "bust", "waist", "hips"].every((d) => {
+      const r = rangeDi(measures, row, d);
+      return !r || r.v >= r.min - TOLLERANZA_CM && r.v <= r.max + TOLLERANZA_CM;
+    });
   }
   function measureInRange(value, min, max) {
     if (isRangeUnspecified(min, max)) return true;
@@ -7919,33 +7954,15 @@
       return comfortSize ? { ...base, comfortSize } : base;
     }
     if (fit === "regular") return base;
-    const chiave2 = dimensioniChiave(options?.garment?.category);
     const rigaDi = (size) => sizeTable.find((r) => r.size === size);
     if (base.confidence === "between" && base.alternative) {
       const [a, b] = [rigaDi(base.size), rigaDi(base.alternative)];
       if (!a || !b) return base;
-      const [minore2, maggiore] = upperLimitsSum(a) <= upperLimitsSum(b) ? [a, b] : [b, a];
-      if (fit === "relaxed") {
-        return { ...base, size: maggiore.size, alternative: minore2.size };
-      }
-      const entraNellaMinore = chiave2.every((d) => {
-        const r = rangeDi(measures, minore2, d);
-        return !r || r.v <= r.max + FIT_MARGIN_CM;
-      });
-      return entraNellaMinore ? { ...base, size: minore2.size, alternative: maggiore.size } : base;
+      const [minore, maggiore] = upperLimitsSum(a) <= upperLimitsSum(b) ? [a, b] : [b, a];
+      return fit === "relaxed" ? { ...base, size: maggiore.size, alternative: minore.size } : { ...base, size: minore.size, alternative: maggiore.size };
     }
-    const attuale = rigaDi(base.size);
-    if (!attuale) return base;
-    const range = chiave2.map((d) => rangeDi(measures, attuale, d)).filter((r) => r != null);
-    if (range.length === 0) return base;
-    if (fit === "relaxed") {
-      const maggiore = riga(sizeTable, base.size, 1);
-      const alLimite = range.some((r) => r.v >= r.max - FIT_MARGIN_CM);
-      return maggiore && alLimite ? { ...base, size: maggiore.size, confidence: "between", alternative: base.size } : base;
-    }
-    const minore = riga(sizeTable, base.size, -1);
-    const tuttoAlMinimo = range.every((r) => r.v <= r.min + FIT_MARGIN_CM);
-    return minore && tuttoAlMinimo ? { ...base, size: minore.size, confidence: "between", alternative: base.size } : base;
+    const altra = riga(sizeTable, base.size, fit === "relaxed" ? 1 : -1);
+    return altra ? { ...base, size: altra.size, confidence: "between", alternative: base.size } : base;
   }
   function consiglioBase(measures, sizeTable, options) {
     if (!sizeTable || sizeTable.length === 0) return null;
@@ -7971,6 +7988,10 @@
         confidence: "exact",
         score: scoreFrom(Q_EXACT_MULTIPLE, options)
       };
+    }
+    const vicine = sizeTable.filter((row) => dentroConTolleranza(measures, row));
+    if (vicine.length === 1) {
+      return { size: vicine[0].size, confidence: "exact", score: scoreFrom(Q_EXACT_MULTIPLE, options) };
     }
     const weights = categoryWeights(options?.garment);
     if (sizeTable.length >= 2) {
@@ -8011,6 +8032,20 @@
       confidence: "between",
       score: scoreFrom(Q_BETWEEN_MAX * (1 - singleNormalized), options)
     };
+  }
+  function perQuestoProdotto(tables, urlPagina) {
+    const pagina = senzaVariante(normalizeProductUrl(urlPagina));
+    const delProdotto = tables.filter((t) => t.prodottoUrl && senzaVariante(t.prodottoUrl) === pagina);
+    return delProdotto.length > 0 ? delProdotto : tables.filter((t) => !t.prodottoUrl);
+  }
+  function senzaVariante(chiave2) {
+    try {
+      const u = new URL(chiave2);
+      u.searchParams.delete("variant");
+      return normalizeProductUrl(u.toString());
+    } catch {
+      return chiave2;
+    }
   }
   function pickSizeTables(tables, category) {
     if (tables.length === 0) return [];
@@ -8158,6 +8193,9 @@
   let garmentAnalysisDone = Promise.resolve();
   let garmentAnalysisPending = false;
   let analisiCapoDaAvviare = null;
+  let chiaviAnalisi = null;
+  let paginaAnalizzata = null;
+  let giroAnalisi = 0;
   let sizeTables;
   let sizeTablesDone = Promise.resolve();
   let rispostaPerChi;
@@ -8604,6 +8642,7 @@
             fitFitted: senzaChiave(getLocaleString("form.fit_fitted")),
             fitRegular: senzaChiave(getLocaleString("form.fit_regular")),
             fitRelaxed: senzaChiave(getLocaleString("form.fit_relaxed")),
+            fitHint: senzaChiave(getLocaleString("form.fit_hint")),
             // Riga sotto il peso (15/11/2026): stessi fallback del piede.
             weightUnused: senzaChiave(getLocaleString("form.weight_unused")),
             weightCheckUnit: senzaChiave(getLocaleString("form.weight_check_unit"))
@@ -8868,7 +8907,7 @@
             const measuresForCalc = { ...widgetContext.measures };
             const footEstimated = measuresForCalc.footCm == null && measuresForCalc.heightCm != null;
             if (footEstimated) measuresForCalc.footCm = stimaPiedeDaAltezza(measuresForCalc.heightCm);
-            (sizeTables ? Promise.resolve(sizeTables) : fetchSizeTables(apiKeyForCalc, baseUrlForCalc)).then((tables) => {
+            (sizeTables ? Promise.resolve(sizeTables) : fetchSizeTables(apiKeyForCalc, baseUrlForCalc).then((t) => t && perQuestoProdotto(t, window.location.href))).then((tables) => {
               if (tables && tables.length > 0) {
                 const scelta = recommendFromTables(measuresForCalc, tables, {
                   measureSource: widgetContext.measureSource ?? void 0,
@@ -9103,7 +9142,7 @@
   function startGarmentAnalysis(apiKey2, baseUrl) {
     sizeTables = void 0;
     sizeTablesDone = fetchSizeTables(apiKey2, baseUrl).then((tables) => {
-      sizeTables = tables;
+      sizeTables = tables && perQuestoProdotto(tables, window.location.href);
     }).catch(() => {
       sizeTables = null;
     });
@@ -9112,31 +9151,49 @@
     garmentAnalysis = null;
     garmentAnalysisDone = Promise.resolve();
     analisiCapoDaAvviare = { apiKey: apiKey2, baseUrl };
+    chiaviAnalisi = analisiCapoDaAvviare;
+    paginaAnalizzata = null;
+    giroAnalisi++;
+    garmentAnalysisPending = false;
   }
   function avviaAnalisiCapo() {
+    const pagina = String(window.location.pathname);
+    if (!analisiCapoDaAvviare && chiaviAnalisi && paginaAnalizzata !== null && paginaAnalizzata !== pagina) {
+      analisiCapoDaAvviare = chiaviAnalisi;
+      garmentAnalysis = null;
+    }
     if (!analisiCapoDaAvviare) return;
     const { apiKey: apiKey2, baseUrl } = analisiCapoDaAvviare;
     analisiCapoDaAvviare = null;
-    if (!extractProductImageUrl()) return;
+    paginaAnalizzata = pagina;
+    const giro = ++giroAnalisi;
+    if (!extractProductImageUrl()) {
+      garmentAnalysisPending = false;
+      garmentAnalysisDone = Promise.resolve();
+      return;
+    }
     garmentAnalysisPending = true;
     garmentAnalysisDone = (async () => {
       for (let i = 0; i < 4; i++) {
+        if (giro !== giroAnalisi) return;
         const url = extractProductImageUrl();
         if (!url) {
           garmentAnalysis = null;
           return;
         }
         const result = await analyzeGarmentFromUrl(apiKey2, url, baseUrl);
+        if (giro !== giroAnalisi) return;
         garmentAnalysis = result;
         if (!capoPiegato(result)) return;
         scartaFotoCapo(url);
       }
+      if (giro !== giroAnalisi) return;
       garmentAnalysis = null;
       rifiutaFotoCapo();
     })().catch(() => {
-      garmentAnalysis = null;
+      if (giro === giroAnalisi) garmentAnalysis = null;
     }).finally(() => {
-      garmentAnalysisPending = false;
+      if (giro === giroAnalisi) garmentAnalysisPending = false;
     });
   }
   function capoPiegato(a) {
