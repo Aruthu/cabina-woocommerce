@@ -55,7 +55,8 @@
     "fit_fitted": "Justo",
     "fit_regular": "Normal",
     "fit_relaxed": "Folgado",
-    "fit_hint": "Muda o tamanho recomendado: Justo um tamanho a menos, Folgado um a mais. Escolha com atenção."
+    "fit_hint": "Muda o tamanho recomendado: Justo um tamanho a menos, Folgado um a mais. Escolha com atenção.",
+    "fit_required": "Escolha o caimento para fazer a prova."
   },
   "rendering": {
     "loading": "Processando...",

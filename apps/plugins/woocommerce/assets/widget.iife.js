@@ -5035,6 +5035,7 @@
     hipsCm: { label: "", placeholder: "95", min: 50, max: 200, step: 0.5, required: false },
     footCm: { label: "", placeholder: "26", min: 15, max: 40, step: 0.5, required: false }
   };
+  let idModulo = 0;
   function createMeasuresForm(strings, callbacks, photoData, prefillMeasures, primaryColor = "#1a1a1a", mostraPiede = false, sesso = null) {
     const container = document.createElement("div");
     container.setAttribute("data-cabina-measures-form", "");
@@ -5244,6 +5245,13 @@
     fitLabel.textContent = strings.fit ?? "Fit";
     fitLabel.style.cssText = "font-size:14px;font-weight:500;color:#374151;margin-bottom:4px;";
     fitWrap.appendChild(fitLabel);
+    const fitRequired = document.createElement("div");
+    fitRequired.setAttribute("data-cabina-fit-required", "");
+    fitRequired.id = `cabina-fit-required-${++idModulo}`;
+    fitRequired.textContent = strings.fitRequired ?? "";
+    fitRequired.style.cssText = "font-size:13px;font-weight:700;color:#b45309;margin-bottom:6px;";
+    if (!strings.fitRequired) fitRequired.style.display = "none";
+    fitWrap.appendChild(fitRequired);
     const fitRow = document.createElement("div");
     fitRow.setAttribute("role", "group");
     fitRow.setAttribute("aria-label", strings.fit ?? "Fit");
@@ -5268,9 +5276,12 @@
       b.type = "button";
       b.textContent = text;
       b.setAttribute("data-cabina-fit-option", value);
+      if (strings.fitRequired) b.setAttribute("aria-describedby", fitRequired.id);
       b.style.cssText = "flex:1;padding:8px 4px;border:1px solid #d1d5db;border-radius:4px;font-size:13px;font-family:inherit;cursor:pointer;";
       b.addEventListener("click", () => {
         fit = value;
+        fitRequired.style.display = "none";
+        for (const [, x] of fitButtons) x.removeAttribute("aria-describedby");
         paintFit();
         updateConfirmButton();
       });
@@ -5282,7 +5293,7 @@
     if (strings.fitHint) {
       const fitHint = document.createElement("div");
       fitHint.textContent = strings.fitHint;
-      fitHint.style.cssText = "font-size:12px;color:#6b7280;margin-top:4px;";
+      fitHint.style.cssText = "font-size:12px;font-weight:700;color:#374151;margin-top:4px;";
       fitWrap.appendChild(fitHint);
     }
     container.appendChild(fitWrap);
@@ -8643,6 +8654,7 @@
             fitRegular: senzaChiave(getLocaleString("form.fit_regular")),
             fitRelaxed: senzaChiave(getLocaleString("form.fit_relaxed")),
             fitHint: senzaChiave(getLocaleString("form.fit_hint")),
+            fitRequired: senzaChiave(getLocaleString("form.fit_required")),
             // Riga sotto il peso (15/11/2026): stessi fallback del piede.
             weightUnused: senzaChiave(getLocaleString("form.weight_unused")),
             weightCheckUnit: senzaChiave(getLocaleString("form.weight_check_unit"))

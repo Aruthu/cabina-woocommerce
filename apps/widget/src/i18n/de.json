@@ -55,7 +55,8 @@
     "fit_fitted": "Eng",
     "fit_regular": "Normal",
     "fit_relaxed": "Weit",
-    "fit_hint": "Ändert die empfohlene Größe: Eng eine Größe kleiner, Weit eine größer. Bitte bewusst wählen."
+    "fit_hint": "Ändert die empfohlene Größe: Eng eine Größe kleiner, Weit eine größer. Bitte bewusst wählen.",
+    "fit_required": "Wählen Sie eine Passform, um die Anprobe zu starten."
   },
   "rendering": {
     "loading": "Verarbeitung läuft...",

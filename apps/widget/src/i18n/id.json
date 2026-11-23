@@ -55,7 +55,8 @@
     "fit_fitted": "Pas badan",
     "fit_regular": "Normal",
     "fit_relaxed": "Longgar",
-    "fit_hint": "Mengubah ukuran yang disarankan: Pas badan satu ukuran lebih kecil, Longgar satu ukuran lebih besar. Pilih dengan teliti."
+    "fit_hint": "Mengubah ukuran yang disarankan: Pas badan satu ukuran lebih kecil, Longgar satu ukuran lebih besar. Pilih dengan teliti.",
+    "fit_required": "Pilih potongan untuk memulai percobaan."
   },
   "rendering": {
     "loading": "Sedang diproses...",

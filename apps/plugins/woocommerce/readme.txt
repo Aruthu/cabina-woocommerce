@@ -5,7 +5,7 @@ Requires at least: 6.5
 Requires Plugins: woocommerce
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 1.3.7
+Stable tag: 1.3.8
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -123,6 +123,11 @@ Yes. The plugin uses standard WooCommerce hooks. If your theme does not support 
 4. The Cabina Dashboard, where you customize the widget
 
 == Changelog ==
+
+= 1.3.8 =
+
+* Widget: until the shopper chooses a fit, a bold line above the three buttons asks them to choose one to start the try-on, and screen readers announce it on the buttons
+* Widget: the line explaining how the fit changes the recommended size is now in bold
 
 = 1.3.7 =
 

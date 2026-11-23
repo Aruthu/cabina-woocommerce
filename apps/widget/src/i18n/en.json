@@ -55,7 +55,8 @@
     "fit_fitted": "Fitted",
     "fit_regular": "Regular",
     "fit_relaxed": "Relaxed",
-    "fit_hint": "It changes the suggested size: Fitted is one size down, Relaxed one size up. Choose carefully."
+    "fit_hint": "It changes the suggested size: Fitted is one size down, Relaxed one size up. Choose carefully.",
+    "fit_required": "Choose a fit to start the try-on."
   },
   "rendering": {
     "loading": "Processing...",

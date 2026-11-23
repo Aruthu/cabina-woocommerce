@@ -55,7 +55,8 @@
     "fit_fitted": "Aderente",
     "fit_regular": "Normale",
     "fit_relaxed": "Comoda",
-    "fit_hint": "Cambia la taglia consigliata: Aderente una taglia in meno, Comoda una in più. Sceglila con attenzione."
+    "fit_hint": "Cambia la taglia consigliata: Aderente una taglia in meno, Comoda una in più. Sceglila con attenzione.",
+    "fit_required": "Scegli la vestibilità per fare la prova."
   },
   "rendering": {
     "loading": "Elaborazione in corso...",

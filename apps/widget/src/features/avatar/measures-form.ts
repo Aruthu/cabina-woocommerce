@@ -36,6 +36,8 @@ export interface MeasuresFormStrings {
   fitRelaxed?: string;
   /** Riga sotto la vestibilità (22/11/2026): cambia la taglia, va scelta con attenzione. */
   fitHint?: string;
+  /** Richiesta sopra i bottoni finché non si sceglie (Arou 22/11/2026). */
+  fitRequired?: string;
   /** Riga sotto il peso (15/11/2026). Opzionali per la stessa ragione del piede. */
   weightUnused?: string;
   weightCheckUnit?: string;
@@ -83,6 +85,9 @@ const FIELD_CONFIG: Record<Exclude<MeasureField, 'weightKg'>, Omit<FieldState, '
   hipsCm: { label: '', placeholder: '95', min: 50, max: 200, step: 0.5, required: false },
   footCm: { label: '', placeholder: '26', min: 15, max: 40, step: 0.5, required: false },
 };
+
+/** Id unici della richiesta della vestibilità, se mai ci fossero due moduli nella pagina. */
+let idModulo = 0;
 
 /**
  * Crea il form misure con validazione inline Zod.
@@ -379,6 +384,17 @@ export function createMeasuresForm(
   fitLabel.textContent = strings.fit ?? 'Fit';
   fitLabel.style.cssText = 'font-size:14px;font-weight:500;color:#374151;margin-bottom:4px;';
   fitWrap.appendChild(fitLabel);
+  // Arou 22/11/2026: senza una frase chi prova non capisce perché «Conferma» è spento.
+  // Resta finché non si sceglie; in grassetto, come la riga sotto i bottoni.
+  const fitRequired = document.createElement('div');
+  fitRequired.setAttribute('data-cabina-fit-required', '');
+  // Lettori di schermo (rilievi Kilo, #478): la frase descrive i tre bottoni, raggiungibili
+  // da tastiera; «Conferma» spento invece non si raggiunge mai.
+  fitRequired.id = `cabina-fit-required-${++idModulo}`;
+  fitRequired.textContent = strings.fitRequired ?? '';
+  fitRequired.style.cssText = 'font-size:13px;font-weight:700;color:#b45309;margin-bottom:6px;';
+  if (!strings.fitRequired) fitRequired.style.display = 'none';
+  fitWrap.appendChild(fitRequired);
   const fitRow = document.createElement('div');
   fitRow.setAttribute('role', 'group');
   fitRow.setAttribute('aria-label', strings.fit ?? 'Fit');
@@ -403,9 +419,14 @@ export function createMeasuresForm(
     b.type = 'button';
     b.textContent = text;
     b.setAttribute('data-cabina-fit-option', value);
+    // Sui bottoni (raggiungibili con Tab): sul solo gruppo non tutti i lettori la leggono.
+    if (strings.fitRequired) b.setAttribute('aria-describedby', fitRequired.id);
     b.style.cssText = 'flex:1;padding:8px 4px;border:1px solid #d1d5db;border-radius:4px;font-size:13px;font-family:inherit;cursor:pointer;';
     b.addEventListener('click', () => {
       fit = value;
+      fitRequired.style.display = 'none';
+      // Nascosta, ma un describedby la leggerebbe ancora.
+      for (const [, x] of fitButtons) x.removeAttribute('aria-describedby');
       paintFit();
       updateConfirmButton();
     });
@@ -417,7 +438,7 @@ export function createMeasuresForm(
   if (strings.fitHint) {
     const fitHint = document.createElement('div');
     fitHint.textContent = strings.fitHint;
-    fitHint.style.cssText = 'font-size:12px;color:#6b7280;margin-top:4px;';
+    fitHint.style.cssText = 'font-size:12px;font-weight:700;color:#374151;margin-top:4px;';
     fitWrap.appendChild(fitHint);
   }
   container.appendChild(fitWrap);
