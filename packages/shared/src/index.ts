@@ -5,3 +5,4 @@ export * from './garment';
 export * from './widget-sri';
 export * from './integration-targets';
 export * from './site-url';
+export * from './size-recommendation';

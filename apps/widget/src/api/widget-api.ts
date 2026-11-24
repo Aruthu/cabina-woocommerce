@@ -134,6 +134,42 @@ export async function fetchSizeTables(
 
 
 /**
+ * Foto HEIC/HEIF che il browser non sa aprire (Chrome su Android, fotocamere
+ * Samsung e iPhone) convertita in JPEG dal server (24/11/2026). Torna un data URL
+ * JPEG, o `null` se non riesce: chi chiama mostra allora il messaggio sull'HEIC.
+ * Stesso schema di `estimateMeasuresFromPhoto`: `text/plain` e `api_key` nel body.
+ *
+ * ⚠️ Compromesso scelto (Arou, strada A del 24/11; rilievo Kilo #489): qui partono i
+ * byte ORIGINALI, con EXIF/GPS, perché il browser non sa decodificarli per toglierli.
+ * Vanno solo al nostro rendering, dopo il consenso; non si conservano e il JPEG che
+ * torna non ha né EXIF né GPS (test `test_il_jpeg_non_porta_exif_ne_gps`). Evitarlo
+ * del tutto vorrebbe un decoder HEIC nel browser (strada C, scartata: LGPL, brevetti HEVC, peso).
+ */
+export async function convertHeicPhoto(apiKey: string, photoDataUrl: string, baseUrl = ''): Promise<string | null> {
+  try {
+    const res = await fetchWithTimeout(
+      `${baseUrl.replace(/\/+$/, '')}/api/widget/converti`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=UTF-8' },
+        body: JSON.stringify({ api_key: apiKey, photo: photoDataUrl.slice(photoDataUrl.indexOf(',') + 1) }),
+      },
+      30_000,
+    );
+    const body = (await res.json().catch(() => null)) as ApiResponse<{ photo: string }> | null;
+    if (!res.ok || !body?.data?.photo) {
+      // Mai loggare il body della richiesta: contiene la foto.
+      console.error(`[cabina] converti HTTP ${res.status}`, body?.error ?? '');
+      return null;
+    }
+    return `data:image/jpeg;base64,${body.data.photo}`;
+  } catch {
+    console.error('[cabina] converti: nessuna risposta');
+    return null;
+  }
+}
+
+/**
  * Chiama il backend AI Vision per stimare le misure dalla foto.
  * POST /api/widget/estimate-measures con X-Api-Key e foto base64.
  *

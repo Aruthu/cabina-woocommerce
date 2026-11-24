@@ -3738,6 +3738,332 @@
     { selector: '[data-button-action="add-to-cart"]', platform: "PrestaShop" }
   ];
   const ADD_TO_CART_SELECTORS = ADD_TO_CART_ROWS.map((r) => r.selector);
+  const FOOT_HEIGHT_RATIO = 0.15;
+  function stimaPiedeDaAltezza(heightCm) {
+    return Math.round(heightCm * FOOT_HEIGHT_RATIO * 2) / 2;
+  }
+  const Q_EXACT_SINGLE = 1;
+  const Q_EXACT_MULTIPLE = 0.7;
+  const Q_BETWEEN_MAX = 0.5;
+  const Q_VISION_PENALTY = 0.15;
+  const SCORE_FLOOR = 80;
+  const SCORE_SPAN = 18;
+  const CATEGORY_WEIGHT_EXTRA = 0.5;
+  const LOOSE_WEIGHT = 0.5;
+  const TOLLERANZA_CM = 2;
+  const MISURA = { height: "heightCm", bust: "bustCm", waist: "waistCm", hips: "hipsCm", foot: "footCm" };
+  const COLONNE = {
+    height: ["heightMin", "heightMax"],
+    bust: ["bustMin", "bustMax"],
+    waist: ["waistMin", "waistMax"],
+    hips: ["hipsMin", "hipsMax"],
+    foot: ["footMin", "footMax"]
+  };
+  function dimensioniChiave(category) {
+    switch (category) {
+      case "top":
+      case "outerwear":
+      case "dress":
+        return ["bust", "waist"];
+      case "bottom":
+        return ["waist", "hips"];
+      case "footwear":
+        return ["foot"];
+      default:
+        return ["bust", "waist", "hips"];
+    }
+  }
+  function rangeDi(measures, row, d) {
+    const [v, min, max] = d === "height" ? [measures.heightCm, row.heightMin, row.heightMax] : d === "bust" ? [measures.bustCm, row.bustMin, row.bustMax] : d === "waist" ? [measures.waistCm, row.waistMin, row.waistMax] : d === "hips" ? [measures.hipsCm, row.hipsMin, row.hipsMax] : [measures.footCm ?? 0, row.footMin ?? 0, row.footMax ?? 0];
+    return isRangeUnspecified(min, max) ? null : { v, min, max };
+  }
+  function dentroConTolleranza(measures, row) {
+    if (rangeDi(measures, row, "foot")) return false;
+    return ["height", "bust", "waist", "hips"].every((d) => {
+      const r = rangeDi(measures, row, d);
+      return !r || r.v >= r.min - TOLLERANZA_CM && r.v <= r.max + TOLLERANZA_CM;
+    });
+  }
+  function measureInRange(value, min, max) {
+    if (isRangeUnspecified(min, max)) return true;
+    return value >= min && value <= max;
+  }
+  function measuresMatchRow(measures, row) {
+    return measureInRange(measures.heightCm, row.heightMin, row.heightMax) && measureInRange(measures.bustCm, row.bustMin, row.bustMax) && measureInRange(measures.waistCm, row.waistMin, row.waistMax) && measureInRange(measures.hipsCm, row.hipsMin, row.hipsMax) && // Il piede: dichiarato solo dalle tabelle scarpe (05/09/2026); altrove è
+    // [0,0] e non conta, come ogni dimensione non dichiarata.
+    measureInRange(measures.footCm ?? 0, row.footMin ?? 0, row.footMax ?? 0);
+  }
+  function usaIlPiede(sizeTable) {
+    return sizeTable.some((r) => !isRangeUnspecified(r.footMin ?? 0, r.footMax ?? 0));
+  }
+  function categoryWeights(garment) {
+    const base = { height: 1, bust: 1, waist: 1, hips: 1, foot: 1 };
+    if (!garment) return base;
+    const effectiveExtra = CATEGORY_WEIGHT_EXTRA * Math.max(0, Math.min(1, garment.confidence));
+    const boosted = 1 + effectiveExtra;
+    switch (garment.category) {
+      case "top":
+      case "outerwear":
+        return { ...base, bust: boosted, waist: boosted };
+      case "bottom":
+        return { ...base, waist: boosted, hips: boosted };
+      case "footwear":
+        return { ...base, foot: boosted };
+      default:
+        return base;
+    }
+  }
+  function isRangeUnspecified(min, max) {
+    return min === 0 && max === 0;
+  }
+  function upperLimitsSum(row) {
+    let total = 0;
+    if (!isRangeUnspecified(row.heightMin, row.heightMax)) total += row.heightMax;
+    if (!isRangeUnspecified(row.bustMin, row.bustMax)) total += row.bustMax;
+    if (!isRangeUnspecified(row.waistMin, row.waistMax)) total += row.waistMax;
+    if (!isRangeUnspecified(row.hipsMin, row.hipsMax)) total += row.hipsMax;
+    if (!isRangeUnspecified(row.footMin ?? 0, row.footMax ?? 0)) total += row.footMax ?? 0;
+    return total;
+  }
+  function exceedsRowMax(measures, row) {
+    return !isRangeUnspecified(row.heightMin, row.heightMax) && measures.heightCm > row.heightMax || !isRangeUnspecified(row.bustMin, row.bustMax) && measures.bustCm > row.bustMax || !isRangeUnspecified(row.waistMin, row.waistMax) && measures.waistCm > row.waistMax || !isRangeUnspecified(row.hipsMin, row.hipsMax) && measures.hipsCm > row.hipsMax || !isRangeUnspecified(row.footMin ?? 0, row.footMax ?? 0) && (measures.footCm ?? 0) > (row.footMax ?? 0);
+  }
+  function weightedDistanceFromRow(measures, row, w) {
+    let dist = 0;
+    if (!isRangeUnspecified(row.heightMin, row.heightMax)) {
+      dist += w.height * (Math.max(0, row.heightMin - measures.heightCm) + Math.max(0, measures.heightCm - row.heightMax));
+    }
+    if (!isRangeUnspecified(row.bustMin, row.bustMax)) {
+      dist += w.bust * (Math.max(0, row.bustMin - measures.bustCm) + Math.max(0, measures.bustCm - row.bustMax));
+    }
+    if (!isRangeUnspecified(row.waistMin, row.waistMax)) {
+      dist += w.waist * (Math.max(0, row.waistMin - measures.waistCm) + Math.max(0, measures.waistCm - row.waistMax));
+    }
+    if (!isRangeUnspecified(row.hipsMin, row.hipsMax)) {
+      dist += w.hips * (Math.max(0, row.hipsMin - measures.hipsCm) + Math.max(0, measures.hipsCm - row.hipsMax));
+    }
+    const footMin = row.footMin ?? 0;
+    const footMax = row.footMax ?? 0;
+    if (!isRangeUnspecified(footMin, footMax)) {
+      const foot = measures.footCm ?? 0;
+      dist += w.foot * (Math.max(0, footMin - foot) + Math.max(0, foot - footMax));
+    }
+    return dist;
+  }
+  function distanceFromRow(measures, row) {
+    let dist = 0;
+    for (const d of ["height", "bust", "waist", "hips", "foot"]) {
+      const r = rangeDi(measures, row, d);
+      if (!r) continue;
+      dist += Math.max(0, r.v - r.max) + LOOSE_WEIGHT * Math.max(0, r.min - r.v);
+    }
+    return dist;
+  }
+  function weightedRangeWidth(row, w) {
+    let total = 0;
+    if (!isRangeUnspecified(row.heightMin, row.heightMax)) {
+      total += w.height * (row.heightMax - row.heightMin);
+    }
+    if (!isRangeUnspecified(row.bustMin, row.bustMax)) {
+      total += w.bust * (row.bustMax - row.bustMin);
+    }
+    if (!isRangeUnspecified(row.waistMin, row.waistMax)) {
+      total += w.waist * (row.waistMax - row.waistMin);
+    }
+    if (!isRangeUnspecified(row.hipsMin, row.hipsMax)) {
+      total += w.hips * (row.hipsMax - row.hipsMin);
+    }
+    if (!isRangeUnspecified(row.footMin ?? 0, row.footMax ?? 0)) {
+      total += w.foot * ((row.footMax ?? 0) - (row.footMin ?? 0));
+    }
+    return total;
+  }
+  function scoreFrom(quality, options) {
+    const penalty = (options?.measureSource ?? "manual") === "vision" || options?.footEstimated ? Q_VISION_PENALTY : 0;
+    const q = Math.max(0, Math.min(1, quality - penalty));
+    return Math.round(SCORE_FLOOR + SCORE_SPAN * q);
+  }
+  function conOrdine(rec, sizeTable) {
+    if (!rec.alternative) return rec;
+    const [a, b] = [rec.size, rec.alternative].map((s) => sizeTable.find((r) => r.size === s));
+    return a && b ? { ...rec, alternativeLarger: upperLimitsSum(b) > upperLimitsSum(a) } : rec;
+  }
+  function riga(sizeTable, size, passo) {
+    const ordinate = [...sizeTable].sort((a, b) => upperLimitsSum(a) - upperLimitsSum(b));
+    const i = ordinate.findIndex((r) => r.size === size);
+    return i < 0 ? void 0 : ordinate[i + passo];
+  }
+  function saltoAmmesso(da, a) {
+    const [x, y] = [da, a].map((s) => parseFloat(s.replace(",", ".")));
+    return Number.isNaN(x) || Number.isNaN(y) || y > x && y - x <= 1;
+  }
+  function applicaVestibilita(base, measures, sizeTable, options) {
+    const fit = options?.fit ?? "regular";
+    if (usaIlPiede(sizeTable)) {
+      const successiva = riga(sizeTable, base.size, 1);
+      const comfortSize = successiva && saltoAmmesso(base.size, successiva.size) ? successiva.size : void 0;
+      if (fit === "relaxed" && comfortSize) {
+        return { ...base, size: comfortSize, confidence: "between", alternative: base.size };
+      }
+      return comfortSize ? { ...base, comfortSize } : base;
+    }
+    if (fit === "regular") return base;
+    const rigaDi = (size) => sizeTable.find((r) => r.size === size);
+    if (base.confidence === "between" && base.alternative) {
+      const [a, b] = [rigaDi(base.size), rigaDi(base.alternative)];
+      if (!a || !b) return base;
+      const [minore, maggiore] = upperLimitsSum(a) <= upperLimitsSum(b) ? [a, b] : [b, a];
+      return fit === "relaxed" ? { ...base, size: maggiore.size, alternative: minore.size } : { ...base, size: minore.size, alternative: maggiore.size };
+    }
+    const altra = riga(sizeTable, base.size, fit === "relaxed" ? 1 : -1);
+    return altra ? { ...base, size: altra.size, confidence: "between", alternative: base.size } : base;
+  }
+  function consiglioBase(measures, sizeTable, options) {
+    if (!sizeTable || sizeTable.length === 0) return null;
+    if (options?.footEstimated && !usaIlPiede(sizeTable)) {
+      options = { ...options, footEstimated: false };
+    }
+    if (["height", "bust", "waist", "hips"].some(
+      (d) => sizeTable.some((r) => rangeDi(measures, r, d)) && measures[MISURA[d]] <= 0
+    )) {
+      return null;
+    }
+    const exactMatches = sizeTable.filter((row) => measuresMatchRow(measures, row));
+    if (exactMatches.length === 1) {
+      return {
+        size: exactMatches[0].size,
+        confidence: "exact",
+        score: scoreFrom(Q_EXACT_SINGLE, options)
+      };
+    }
+    if (exactMatches.length > 1) {
+      return {
+        size: exactMatches[0].size,
+        confidence: "exact",
+        score: scoreFrom(Q_EXACT_MULTIPLE, options)
+      };
+    }
+    const vicine = sizeTable.filter((row) => dentroConTolleranza(measures, row));
+    if (vicine.length === 1) {
+      return { size: vicine[0].size, confidence: "exact", score: scoreFrom(Q_EXACT_MULTIPLE, options) };
+    }
+    const weights = categoryWeights(options?.garment);
+    if (sizeTable.length >= 2) {
+      const withDistances = sizeTable.map((row) => ({
+        row,
+        distance: distanceFromRow(measures, row)
+      }));
+      withDistances.sort((a, b) => a.distance - b.distance);
+      const closest = withDistances[0];
+      const second = withDistances[1];
+      const larger = upperLimitsSum(closest.row) !== upperLimitsSum(second.row) ? upperLimitsSum(closest.row) > upperLimitsSum(second.row) ? closest : second : sizeTable.indexOf(closest.row) > sizeTable.indexOf(second.row) ? closest : second;
+      const smaller = larger === closest ? second : closest;
+      const chosen = exceedsRowMax(measures, smaller.row) ? larger : closest;
+      const other = chosen === closest ? second : closest;
+      const chosenWeightedDist = weightedDistanceFromRow(measures, chosen.row, weights);
+      const chosenScale = weightedRangeWidth(chosen.row, weights);
+      const chosenNormalized = chosenScale > 0 ? Math.min(1, chosenWeightedDist / chosenScale) : 1;
+      return {
+        size: chosen.row.size,
+        confidence: "between",
+        alternative: other.row.size,
+        score: scoreFrom(Q_BETWEEN_MAX * (1 - chosenNormalized), options)
+      };
+    }
+    if (measuresMatchRow(measures, sizeTable[0])) {
+      return {
+        size: sizeTable[0].size,
+        confidence: "exact",
+        score: scoreFrom(Q_EXACT_SINGLE, options)
+      };
+    }
+    const singleRow = sizeTable[0];
+    const singleDist = weightedDistanceFromRow(measures, singleRow, weights);
+    const singleScale = weightedRangeWidth(singleRow, weights);
+    const singleNormalized = singleScale > 0 ? Math.min(1, singleDist / singleScale) : 1;
+    return {
+      size: singleRow.size,
+      confidence: "between",
+      score: scoreFrom(Q_BETWEEN_MAX * (1 - singleNormalized), options)
+    };
+  }
+  function perQuestoProdotto(tables, urlPagina) {
+    const pagina = senzaVariante(normalizeProductUrl(urlPagina));
+    const delProdotto = tables.filter((t) => t.prodottoUrl && senzaVariante(t.prodottoUrl) === pagina);
+    return delProdotto.length > 0 ? delProdotto : tables.filter((t) => !t.prodottoUrl);
+  }
+  function senzaVariante(chiave2) {
+    try {
+      const u = new URL(chiave2);
+      u.searchParams.delete("variant");
+      return normalizeProductUrl(u.toString());
+    } catch {
+      return chiave2;
+    }
+  }
+  function pickSizeTables(tables, category) {
+    if (tables.length === 0) return [];
+    const volute = category === "outerwear" ? ["outerwear", "top"] : category === "dress" ? ["dress", "top"] : category === "top" || category === "bottom" || category === "footwear" ? [category] : [];
+    for (const voluta of volute) {
+      const trovate = tables.filter((t) => t.category === voluta);
+      if (trovate.length > 0) return trovate;
+    }
+    const generiche = tables.filter((t) => t.category === null);
+    return generiche.length > 0 ? generiche : [tables[0]];
+  }
+  function perChiIlCapo(tables, category) {
+    const kids = (t) => t.audience === "kids";
+    const categoriaIgnota = category == null || category === "unknown" || category === "accessory";
+    const candidate = categoriaIgnota ? tables : pickSizeTables(tables, category);
+    if (!candidate.some(kids)) return "adult";
+    return candidate.every(kids) ? "kids" : "ask";
+  }
+  function recommendFromTables(measures, tables, options) {
+    const tutte = pickSizeTables(tables, options?.garment?.category ?? null);
+    const delPubblico = options?.perChi ? tutte.filter((t) => t.audience === "kids" === (options.perChi === "kids")) : tutte;
+    const candidate = delPubblico.length > 0 ? delPubblico : tutte;
+    const chiave2 = dimensioniChiave(options?.garment?.category);
+    const piene = {
+      heightCm: measures.heightCm ?? 0,
+      bustCm: measures.bustCm ?? 0,
+      waistCm: measures.waistCm ?? 0,
+      hipsCm: measures.hipsCm ?? 0,
+      footCm: measures.footCm
+    };
+    let migliore = null;
+    for (const table of candidate) {
+      const data = soloMisureDate(table.data, measures, chiave2);
+      if (!data) continue;
+      const recommendation = consiglioBase(piene, data, options);
+      if (!recommendation) continue;
+      const vince = !migliore || recommendation.confidence === "exact" && migliore.recommendation.confidence !== "exact" || recommendation.confidence === migliore.recommendation.confidence && recommendation.score > migliore.recommendation.score;
+      if (vince) migliore = { recommendation, table, data };
+    }
+    if (!migliore) return null;
+    return {
+      recommendation: conOrdine(
+        applicaVestibilita(migliore.recommendation, piene, migliore.data, options),
+        migliore.data
+      ),
+      table: migliore.table,
+      candidates: candidate.length
+    };
+  }
+  function soloMisureDate(rows, measures, chiave2) {
+    const dichiarata = (d) => rows.some((r) => !isRangeUnspecified(r[COLONNE[d][0]] ?? 0, r[COLONNE[d][1]] ?? 0));
+    const dichiarate = ["height", "bust", "waist", "hips", "foot"].filter(dichiarata);
+    const assenti = dichiarate.filter((d) => measures[MISURA[d]] == null);
+    if (assenti.length === dichiarate.length || assenti.some((d) => chiave2.includes(d))) return null;
+    if (assenti.length === 0) return rows;
+    return rows.map((r) => {
+      const ridotta = { ...r };
+      for (const d of assenti) {
+        ridotta[COLONNE[d][0]] = 0;
+        ridotta[COLONNE[d][1]] = 0;
+      }
+      return ridotta;
+    });
+  }
   async function fetchWithTimeout(url, options = {}, timeoutMs = 1e4) {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
@@ -3807,6 +4133,28 @@
       } else if (!(err instanceof SyntaxError)) {
         console.error("[widget] error=INTERNAL_ERROR");
       }
+      return null;
+    }
+  }
+  async function convertHeicPhoto(apiKey2, photoDataUrl, baseUrl = "") {
+    try {
+      const res = await fetchWithTimeout(
+        `${baseUrl.replace(/\/+$/, "")}/api/widget/converti`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "text/plain;charset=UTF-8" },
+          body: JSON.stringify({ api_key: apiKey2, photo: photoDataUrl.slice(photoDataUrl.indexOf(",") + 1) })
+        },
+        3e4
+      );
+      const body = await res.json().catch(() => null);
+      if (!res.ok || !body?.data?.photo) {
+        console.error(`[cabina] converti HTTP ${res.status}`, body?.error ?? "");
+        return null;
+      }
+      return `data:image/jpeg;base64,${body.data.photo}`;
+    } catch {
+      console.error("[cabina] converti: nessuna risposta");
       return null;
     }
   }
@@ -4644,6 +4992,11 @@
   function isHeicFile(name, mimeType) {
     return mimeType.startsWith("image/heic") || mimeType.startsWith("image/heif") || /\.(hei[cf]s?|hif)$/i.test(name);
   }
+  function photoAccept(userAgent, maxTouchPoints) {
+    const base = "image/jpeg,image/png,image/webp";
+    const ios = /iPhone|iPad|iPod/.test(userAgent) || /Macintosh/.test(userAgent) && maxTouchPoints > 1;
+    return ios ? base : `${base},image/heic,image/heif,image/heic-sequence,image/heif-sequence`;
+  }
   function validatePhotoFile(file) {
     if (!isSupportedMimeType(file.type) && !isHeicFile(file.name, file.type)) {
       return { valid: false, error: "unsupported_format" };
@@ -4747,6 +5100,7 @@
   }
   const PRIVACY_URL = "https://cabina.io/privacy";
   const TERMS_URL = "https://cabina.io/termini";
+  const HEIC_CONVERT_MAX_BYTES = 3e6;
   function createPhotoCapture(strings, callbacks) {
     const fragment = document.createDocumentFragment();
     const container = document.createElement("div");
@@ -4829,7 +5183,7 @@
     buttonRow.style.cssText = "display:flex;gap:8px;flex-wrap:wrap;";
     const fileInput = document.createElement("input");
     fileInput.type = "file";
-    fileInput.accept = "image/jpeg,image/png,image/webp";
+    fileInput.accept = photoAccept(navigator.userAgent, navigator.maxTouchPoints ?? 0);
     fileInput.style.display = "none";
     fileInput.setAttribute("data-cabina-file-input", "");
     container.appendChild(fileInput);
@@ -4844,7 +5198,6 @@
     buttonRow.appendChild(uploadBtn);
     container.appendChild(buttonRow);
     fragment.appendChild(container);
-    let currentDataUrl = null;
     function applyConsentState() {
       const given = consentCheckbox.checked;
       uploadBtn.disabled = !given;
@@ -4892,7 +5245,6 @@
       preview.appendChild(img);
     }
     function clearPhoto() {
-      currentDataUrl = null;
       qualityIndicator.textContent = "";
     }
     let selectionToken = 0;
@@ -4909,21 +5261,42 @@
         }
         return;
       }
+      let dataUrl;
       try {
-        const dataUrl = await readFileAsDataUrl(file);
-        const quality = await assessPhotoQuality(await downscalePhotoDataUrl(dataUrl));
-        const downscaled = await downscalePhotoDataUrl(dataUrl, PHOTO_MAX_EDGE_PX, true);
-        if (token !== selectionToken) return;
-        currentDataUrl = downscaled;
-        showPreview(downscaled);
-        showQuality(quality);
-        if (quality.quality !== "low" && consentCheckbox.checked) {
-          callbacks.onPhotoReady(downscaled);
-        }
+        dataUrl = await readFileAsDataUrl(file);
       } catch {
         if (token !== selectionToken) return;
         clearPhoto();
         showError(isHeicFile(file.name, file.type) ? strings.heicNotSupported : strings.unsupportedFormat);
+        return;
+      }
+      try {
+        await elabora(dataUrl, token);
+      } catch {
+        if (token !== selectionToken) return;
+        const heic = isHeicFile(file.name, file.type);
+        const jpeg = heic && callbacks.convertHeic && consentCheckbox.checked && file.size <= HEIC_CONVERT_MAX_BYTES ? await callbacks.convertHeic(dataUrl).catch(() => null) : null;
+        if (token !== selectionToken) return;
+        if (jpeg) {
+          try {
+            await elabora(jpeg, token);
+            return;
+          } catch {
+          }
+          if (token !== selectionToken) return;
+        }
+        clearPhoto();
+        showError(heic ? strings.heicNotSupported : strings.unsupportedFormat);
+      }
+    }
+    async function elabora(dataUrl, token) {
+      const quality = await assessPhotoQuality(await downscalePhotoDataUrl(dataUrl));
+      const downscaled = await downscalePhotoDataUrl(dataUrl, PHOTO_MAX_EDGE_PX, true);
+      if (token !== selectionToken) return;
+      showPreview(downscaled);
+      showQuality(quality);
+      if (quality.quality !== "low" && consentCheckbox.checked) {
+        callbacks.onPhotoReady(downscaled);
       }
     }
     fileInput.addEventListener("change", () => {
@@ -7795,332 +8168,6 @@
     }
     document.querySelectorAll(`[${AUTO_ATTR}]`).forEach((el) => el.remove());
   }
-  const FOOT_HEIGHT_RATIO = 0.15;
-  function stimaPiedeDaAltezza(heightCm) {
-    return Math.round(heightCm * FOOT_HEIGHT_RATIO * 2) / 2;
-  }
-  const Q_EXACT_SINGLE = 1;
-  const Q_EXACT_MULTIPLE = 0.7;
-  const Q_BETWEEN_MAX = 0.5;
-  const Q_VISION_PENALTY = 0.15;
-  const SCORE_FLOOR = 80;
-  const SCORE_SPAN = 18;
-  const CATEGORY_WEIGHT_EXTRA = 0.5;
-  const LOOSE_WEIGHT = 0.5;
-  const TOLLERANZA_CM = 2;
-  const MISURA = { height: "heightCm", bust: "bustCm", waist: "waistCm", hips: "hipsCm", foot: "footCm" };
-  const COLONNE = {
-    height: ["heightMin", "heightMax"],
-    bust: ["bustMin", "bustMax"],
-    waist: ["waistMin", "waistMax"],
-    hips: ["hipsMin", "hipsMax"],
-    foot: ["footMin", "footMax"]
-  };
-  function dimensioniChiave(category) {
-    switch (category) {
-      case "top":
-      case "outerwear":
-      case "dress":
-        return ["bust", "waist"];
-      case "bottom":
-        return ["waist", "hips"];
-      case "footwear":
-        return ["foot"];
-      default:
-        return ["bust", "waist", "hips"];
-    }
-  }
-  function rangeDi(measures, row, d) {
-    const [v, min, max] = d === "height" ? [measures.heightCm, row.heightMin, row.heightMax] : d === "bust" ? [measures.bustCm, row.bustMin, row.bustMax] : d === "waist" ? [measures.waistCm, row.waistMin, row.waistMax] : d === "hips" ? [measures.hipsCm, row.hipsMin, row.hipsMax] : [measures.footCm ?? 0, row.footMin ?? 0, row.footMax ?? 0];
-    return isRangeUnspecified(min, max) ? null : { v, min, max };
-  }
-  function dentroConTolleranza(measures, row) {
-    if (rangeDi(measures, row, "foot")) return false;
-    return ["height", "bust", "waist", "hips"].every((d) => {
-      const r = rangeDi(measures, row, d);
-      return !r || r.v >= r.min - TOLLERANZA_CM && r.v <= r.max + TOLLERANZA_CM;
-    });
-  }
-  function measureInRange(value, min, max) {
-    if (isRangeUnspecified(min, max)) return true;
-    return value >= min && value <= max;
-  }
-  function measuresMatchRow(measures, row) {
-    return measureInRange(measures.heightCm, row.heightMin, row.heightMax) && measureInRange(measures.bustCm, row.bustMin, row.bustMax) && measureInRange(measures.waistCm, row.waistMin, row.waistMax) && measureInRange(measures.hipsCm, row.hipsMin, row.hipsMax) && // Il piede: dichiarato solo dalle tabelle scarpe (05/09/2026); altrove è
-    // [0,0] e non conta, come ogni dimensione non dichiarata.
-    measureInRange(measures.footCm ?? 0, row.footMin ?? 0, row.footMax ?? 0);
-  }
-  function usaIlPiede(sizeTable) {
-    return sizeTable.some((r) => !isRangeUnspecified(r.footMin ?? 0, r.footMax ?? 0));
-  }
-  function categoryWeights(garment) {
-    const base = { height: 1, bust: 1, waist: 1, hips: 1, foot: 1 };
-    if (!garment) return base;
-    const effectiveExtra = CATEGORY_WEIGHT_EXTRA * Math.max(0, Math.min(1, garment.confidence));
-    const boosted = 1 + effectiveExtra;
-    switch (garment.category) {
-      case "top":
-      case "outerwear":
-        return { ...base, bust: boosted, waist: boosted };
-      case "bottom":
-        return { ...base, waist: boosted, hips: boosted };
-      case "footwear":
-        return { ...base, foot: boosted };
-      default:
-        return base;
-    }
-  }
-  function isRangeUnspecified(min, max) {
-    return min === 0 && max === 0;
-  }
-  function upperLimitsSum(row) {
-    let total = 0;
-    if (!isRangeUnspecified(row.heightMin, row.heightMax)) total += row.heightMax;
-    if (!isRangeUnspecified(row.bustMin, row.bustMax)) total += row.bustMax;
-    if (!isRangeUnspecified(row.waistMin, row.waistMax)) total += row.waistMax;
-    if (!isRangeUnspecified(row.hipsMin, row.hipsMax)) total += row.hipsMax;
-    if (!isRangeUnspecified(row.footMin ?? 0, row.footMax ?? 0)) total += row.footMax ?? 0;
-    return total;
-  }
-  function exceedsRowMax(measures, row) {
-    return !isRangeUnspecified(row.heightMin, row.heightMax) && measures.heightCm > row.heightMax || !isRangeUnspecified(row.bustMin, row.bustMax) && measures.bustCm > row.bustMax || !isRangeUnspecified(row.waistMin, row.waistMax) && measures.waistCm > row.waistMax || !isRangeUnspecified(row.hipsMin, row.hipsMax) && measures.hipsCm > row.hipsMax || !isRangeUnspecified(row.footMin ?? 0, row.footMax ?? 0) && (measures.footCm ?? 0) > (row.footMax ?? 0);
-  }
-  function weightedDistanceFromRow(measures, row, w) {
-    let dist = 0;
-    if (!isRangeUnspecified(row.heightMin, row.heightMax)) {
-      dist += w.height * (Math.max(0, row.heightMin - measures.heightCm) + Math.max(0, measures.heightCm - row.heightMax));
-    }
-    if (!isRangeUnspecified(row.bustMin, row.bustMax)) {
-      dist += w.bust * (Math.max(0, row.bustMin - measures.bustCm) + Math.max(0, measures.bustCm - row.bustMax));
-    }
-    if (!isRangeUnspecified(row.waistMin, row.waistMax)) {
-      dist += w.waist * (Math.max(0, row.waistMin - measures.waistCm) + Math.max(0, measures.waistCm - row.waistMax));
-    }
-    if (!isRangeUnspecified(row.hipsMin, row.hipsMax)) {
-      dist += w.hips * (Math.max(0, row.hipsMin - measures.hipsCm) + Math.max(0, measures.hipsCm - row.hipsMax));
-    }
-    const footMin = row.footMin ?? 0;
-    const footMax = row.footMax ?? 0;
-    if (!isRangeUnspecified(footMin, footMax)) {
-      const foot = measures.footCm ?? 0;
-      dist += w.foot * (Math.max(0, footMin - foot) + Math.max(0, foot - footMax));
-    }
-    return dist;
-  }
-  function distanceFromRow(measures, row) {
-    let dist = 0;
-    for (const d of ["height", "bust", "waist", "hips", "foot"]) {
-      const r = rangeDi(measures, row, d);
-      if (!r) continue;
-      dist += Math.max(0, r.v - r.max) + LOOSE_WEIGHT * Math.max(0, r.min - r.v);
-    }
-    return dist;
-  }
-  function weightedRangeWidth(row, w) {
-    let total = 0;
-    if (!isRangeUnspecified(row.heightMin, row.heightMax)) {
-      total += w.height * (row.heightMax - row.heightMin);
-    }
-    if (!isRangeUnspecified(row.bustMin, row.bustMax)) {
-      total += w.bust * (row.bustMax - row.bustMin);
-    }
-    if (!isRangeUnspecified(row.waistMin, row.waistMax)) {
-      total += w.waist * (row.waistMax - row.waistMin);
-    }
-    if (!isRangeUnspecified(row.hipsMin, row.hipsMax)) {
-      total += w.hips * (row.hipsMax - row.hipsMin);
-    }
-    if (!isRangeUnspecified(row.footMin ?? 0, row.footMax ?? 0)) {
-      total += w.foot * ((row.footMax ?? 0) - (row.footMin ?? 0));
-    }
-    return total;
-  }
-  function scoreFrom(quality, options) {
-    const penalty = (options?.measureSource ?? "manual") === "vision" || options?.footEstimated ? Q_VISION_PENALTY : 0;
-    const q = Math.max(0, Math.min(1, quality - penalty));
-    return Math.round(SCORE_FLOOR + SCORE_SPAN * q);
-  }
-  function conOrdine(rec, sizeTable) {
-    if (!rec.alternative) return rec;
-    const [a, b] = [rec.size, rec.alternative].map((s) => sizeTable.find((r) => r.size === s));
-    return a && b ? { ...rec, alternativeLarger: upperLimitsSum(b) > upperLimitsSum(a) } : rec;
-  }
-  function riga(sizeTable, size, passo) {
-    const ordinate = [...sizeTable].sort((a, b) => upperLimitsSum(a) - upperLimitsSum(b));
-    const i = ordinate.findIndex((r) => r.size === size);
-    return i < 0 ? void 0 : ordinate[i + passo];
-  }
-  function saltoAmmesso(da, a) {
-    const [x, y] = [da, a].map((s) => parseFloat(s.replace(",", ".")));
-    return Number.isNaN(x) || Number.isNaN(y) || y > x && y - x <= 1;
-  }
-  function applicaVestibilita(base, measures, sizeTable, options) {
-    const fit = options?.fit ?? "regular";
-    if (usaIlPiede(sizeTable)) {
-      const successiva = riga(sizeTable, base.size, 1);
-      const comfortSize = successiva && saltoAmmesso(base.size, successiva.size) ? successiva.size : void 0;
-      if (fit === "relaxed" && comfortSize) {
-        return { ...base, size: comfortSize, confidence: "between", alternative: base.size };
-      }
-      return comfortSize ? { ...base, comfortSize } : base;
-    }
-    if (fit === "regular") return base;
-    const rigaDi = (size) => sizeTable.find((r) => r.size === size);
-    if (base.confidence === "between" && base.alternative) {
-      const [a, b] = [rigaDi(base.size), rigaDi(base.alternative)];
-      if (!a || !b) return base;
-      const [minore, maggiore] = upperLimitsSum(a) <= upperLimitsSum(b) ? [a, b] : [b, a];
-      return fit === "relaxed" ? { ...base, size: maggiore.size, alternative: minore.size } : { ...base, size: minore.size, alternative: maggiore.size };
-    }
-    const altra = riga(sizeTable, base.size, fit === "relaxed" ? 1 : -1);
-    return altra ? { ...base, size: altra.size, confidence: "between", alternative: base.size } : base;
-  }
-  function consiglioBase(measures, sizeTable, options) {
-    if (!sizeTable || sizeTable.length === 0) return null;
-    if (options?.footEstimated && !usaIlPiede(sizeTable)) {
-      options = { ...options, footEstimated: false };
-    }
-    if (["height", "bust", "waist", "hips"].some(
-      (d) => sizeTable.some((r) => rangeDi(measures, r, d)) && measures[MISURA[d]] <= 0
-    )) {
-      return null;
-    }
-    const exactMatches = sizeTable.filter((row) => measuresMatchRow(measures, row));
-    if (exactMatches.length === 1) {
-      return {
-        size: exactMatches[0].size,
-        confidence: "exact",
-        score: scoreFrom(Q_EXACT_SINGLE, options)
-      };
-    }
-    if (exactMatches.length > 1) {
-      return {
-        size: exactMatches[0].size,
-        confidence: "exact",
-        score: scoreFrom(Q_EXACT_MULTIPLE, options)
-      };
-    }
-    const vicine = sizeTable.filter((row) => dentroConTolleranza(measures, row));
-    if (vicine.length === 1) {
-      return { size: vicine[0].size, confidence: "exact", score: scoreFrom(Q_EXACT_MULTIPLE, options) };
-    }
-    const weights = categoryWeights(options?.garment);
-    if (sizeTable.length >= 2) {
-      const withDistances = sizeTable.map((row) => ({
-        row,
-        distance: distanceFromRow(measures, row)
-      }));
-      withDistances.sort((a, b) => a.distance - b.distance);
-      const closest = withDistances[0];
-      const second = withDistances[1];
-      const larger = upperLimitsSum(closest.row) !== upperLimitsSum(second.row) ? upperLimitsSum(closest.row) > upperLimitsSum(second.row) ? closest : second : sizeTable.indexOf(closest.row) > sizeTable.indexOf(second.row) ? closest : second;
-      const smaller = larger === closest ? second : closest;
-      const chosen = exceedsRowMax(measures, smaller.row) ? larger : closest;
-      const other = chosen === closest ? second : closest;
-      const chosenWeightedDist = weightedDistanceFromRow(measures, chosen.row, weights);
-      const chosenScale = weightedRangeWidth(chosen.row, weights);
-      const chosenNormalized = chosenScale > 0 ? Math.min(1, chosenWeightedDist / chosenScale) : 1;
-      return {
-        size: chosen.row.size,
-        confidence: "between",
-        alternative: other.row.size,
-        score: scoreFrom(Q_BETWEEN_MAX * (1 - chosenNormalized), options)
-      };
-    }
-    if (measuresMatchRow(measures, sizeTable[0])) {
-      return {
-        size: sizeTable[0].size,
-        confidence: "exact",
-        score: scoreFrom(Q_EXACT_SINGLE, options)
-      };
-    }
-    const singleRow = sizeTable[0];
-    const singleDist = weightedDistanceFromRow(measures, singleRow, weights);
-    const singleScale = weightedRangeWidth(singleRow, weights);
-    const singleNormalized = singleScale > 0 ? Math.min(1, singleDist / singleScale) : 1;
-    return {
-      size: singleRow.size,
-      confidence: "between",
-      score: scoreFrom(Q_BETWEEN_MAX * (1 - singleNormalized), options)
-    };
-  }
-  function perQuestoProdotto(tables, urlPagina) {
-    const pagina = senzaVariante(normalizeProductUrl(urlPagina));
-    const delProdotto = tables.filter((t) => t.prodottoUrl && senzaVariante(t.prodottoUrl) === pagina);
-    return delProdotto.length > 0 ? delProdotto : tables.filter((t) => !t.prodottoUrl);
-  }
-  function senzaVariante(chiave2) {
-    try {
-      const u = new URL(chiave2);
-      u.searchParams.delete("variant");
-      return normalizeProductUrl(u.toString());
-    } catch {
-      return chiave2;
-    }
-  }
-  function pickSizeTables(tables, category) {
-    if (tables.length === 0) return [];
-    const volute = category === "outerwear" ? ["outerwear", "top"] : category === "dress" ? ["dress", "top"] : category === "top" || category === "bottom" || category === "footwear" ? [category] : [];
-    for (const voluta of volute) {
-      const trovate = tables.filter((t) => t.category === voluta);
-      if (trovate.length > 0) return trovate;
-    }
-    const generiche = tables.filter((t) => t.category === null);
-    return generiche.length > 0 ? generiche : [tables[0]];
-  }
-  function perChiIlCapo(tables, category) {
-    const kids = (t) => t.audience === "kids";
-    const categoriaIgnota = category == null || category === "unknown" || category === "accessory";
-    const candidate = categoriaIgnota ? tables : pickSizeTables(tables, category);
-    if (!candidate.some(kids)) return "adult";
-    return candidate.every(kids) ? "kids" : "ask";
-  }
-  function recommendFromTables(measures, tables, options) {
-    const tutte = pickSizeTables(tables, options?.garment?.category ?? null);
-    const delPubblico = options?.perChi ? tutte.filter((t) => t.audience === "kids" === (options.perChi === "kids")) : tutte;
-    const candidate = delPubblico.length > 0 ? delPubblico : tutte;
-    const chiave2 = dimensioniChiave(options?.garment?.category);
-    const piene = {
-      heightCm: measures.heightCm ?? 0,
-      bustCm: measures.bustCm ?? 0,
-      waistCm: measures.waistCm ?? 0,
-      hipsCm: measures.hipsCm ?? 0,
-      footCm: measures.footCm
-    };
-    let migliore = null;
-    for (const table of candidate) {
-      const data = soloMisureDate(table.data, measures, chiave2);
-      if (!data) continue;
-      const recommendation = consiglioBase(piene, data, options);
-      if (!recommendation) continue;
-      const vince = !migliore || recommendation.confidence === "exact" && migliore.recommendation.confidence !== "exact" || recommendation.confidence === migliore.recommendation.confidence && recommendation.score > migliore.recommendation.score;
-      if (vince) migliore = { recommendation, table, data };
-    }
-    if (!migliore) return null;
-    return {
-      recommendation: conOrdine(
-        applicaVestibilita(migliore.recommendation, piene, migliore.data, options),
-        migliore.data
-      ),
-      table: migliore.table,
-      candidates: candidate.length
-    };
-  }
-  function soloMisureDate(rows, measures, chiave2) {
-    const dichiarata = (d) => rows.some((r) => !isRangeUnspecified(r[COLONNE[d][0]] ?? 0, r[COLONNE[d][1]] ?? 0));
-    const dichiarate = ["height", "bust", "waist", "hips", "foot"].filter(dichiarata);
-    const assenti = dichiarate.filter((d) => measures[MISURA[d]] == null);
-    if (assenti.length === dichiarate.length || assenti.some((d) => chiave2.includes(d))) return null;
-    if (assenti.length === 0) return rows;
-    return rows.map((r) => {
-      const ridotta = { ...r };
-      for (const d of assenti) {
-        ridotta[COLONNE[d][0]] = 0;
-        ridotta[COLONNE[d][1]] = 0;
-      }
-      return ridotta;
-    });
-  }
   const CAMPO_ATTRIBUZIONE = "properties[_cabina]";
   let ultimaSessione = null;
   function conLettore() {
@@ -8525,6 +8572,8 @@
             consentRequired: getLocaleString("photo.consent_required")
           },
           {
+            // HEIC di Samsung/iPhone che il browser non apre: lo converte il server (24/11/2026).
+            convertHeic: (dataUrl) => convertHeicPhoto(apiKey2, dataUrl, widgetContext.baseUrl ?? ""),
             onPhotoReady: (dataUrl) => {
               segnaModellaScelta(content, null);
               widgetContext = widgetReducer(widgetContext, { type: "PHOTO_UPLOADED", dataUrl });

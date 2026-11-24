@@ -4,6 +4,7 @@ import {
   assessPhotoQuality,
   downscalePhotoDataUrl,
   isHeicFile,
+  photoAccept,
   PHOTO_MAX_EDGE_PX,
   type PhotoQualityResult,
 } from './photo-utils';
@@ -45,6 +46,9 @@ export interface PhotoCaptureStrings {
   consentRequired: string;
 }
 
+/** Il server accetta 4 M caratteri base64 (sotto i 4,5 MB di Vercel): ~3 MB di file. */
+export const HEIC_CONVERT_MAX_BYTES = 3_000_000;
+
 export interface PhotoCaptureCallbacks {
   onPhotoReady: (dataUrl: string) => void;
   /** Spunta cambiata: `true` = consenso dato, `false` = **revocato**. Chi chiama
@@ -52,6 +56,9 @@ export interface PhotoCaptureCallbacks {
    *  che l'acquirente ha di ritirare il consenso (Art. 7(3)). */
   onConsentChange: (given: boolean) => void;
   onClose: () => void;
+  /** HEIC che il browser non sa aprire → data URL JPEG convertito dal server, o `null` (24/11/2026).
+   *  Solo fino a `HEIC_CONVERT_MAX_BYTES`. */
+  convertHeic?: (photoDataUrl: string) => Promise<string | null>;
 }
 
 /**
@@ -206,11 +213,9 @@ export function createPhotoCapture(
   // (Playwright setInputFiles) né da screen reader/autofill.
   const fileInput = document.createElement('input');
   fileInput.type = 'file';
-  // HEIC/HEIF NON sono dichiarati di proposito: iOS Safari transcodifica in JPEG
-  // all'upload solo quando l'accept non li menziona. Dichiararli farebbe arrivare
-  // l'HEIC originale proprio sul canale mobile. Chi ne sceglie uno lo stesso
-  // (picker desktop, drag&drop) viene comunque gestito: si prova a decodificarlo.
-  fileInput.accept = 'image/jpeg,image/png,image/webp';
+  // Su iPhone/iPad niente HEIC (Safari lo transcodifica solo così); altrove sì, o il
+  // selettore di Android nasconde le foto HEIC dei Samsung (24/11/2026): vedi `photoAccept`.
+  fileInput.accept = photoAccept(navigator.userAgent, navigator.maxTouchPoints ?? 0);
   fileInput.style.display = 'none';
   fileInput.setAttribute('data-cabina-file-input', '');
   container.appendChild(fileInput);
@@ -314,40 +319,74 @@ export function createPhotoCapture(
       return;
     }
 
+    let dataUrl: string;
     try {
-      const dataUrl = await readFileAsDataUrl(file);
-      // Resize UNA volta qui (2026-07-31, bug PHOTO_TOO_LARGE): photoData resta
-      // gestibile per la stima misure e per il try-on.
-      // 2026-09-22 — il gate di qualità conta i PIXEL VERI, quindi si valuta
-      // sulla foto solo ridotta; poi, per il try-on, `enlarge` porta il lato
-      // lungo a 2048 anche se la foto è più piccola (il sito promette 2K).
-      // ⚠️ Rilievo Kilo (PR #242): valutare la qualità DOPO l'ingrandimento
-      // faceva passare come «ottima» qualunque foto, perché ogni foto arrivava
-      // a 3 MP. Le due passate partono entrambe dall'originale, così la copia
-      // per il try-on non è ricodificata due volte.
-      const quality = await assessPhotoQuality(await downscalePhotoDataUrl(dataUrl));
-      const downscaled = await downscalePhotoDataUrl(dataUrl, PHOTO_MAX_EDGE_PX, true);
-      if (token !== selectionToken) return; // sorpassata da una selezione più recente
-      currentDataUrl = downscaled;
-      showPreview(downscaled);
-      showQuality(quality);
-
-      // ⚠️ Il gate di qualità sopravvive al bottone «Continua» che lo applicava:
-      // con `low` si resta qui, l'indicatore rosso dice perché, e l'acquirente
-      // ne sceglie un'altra. Con qualità accettabile si prosegue da soli — ed è
-      // qui che si risparmia il clic.
-      // ⚠️ Ricontrolla anche la spunta: fra la scelta del file e la decodifica
-      // l'acquirente può averla tolta, e quella revoca deve valere.
-      if (quality.quality !== 'low' && consentCheckbox.checked) {
-        callbacks.onPhotoReady(downscaled);
-      }
+      dataUrl = await readFileAsDataUrl(file);
     } catch {
       if (token !== selectionToken) return;
+      clearPhoto();
+      showError(isHeicFile(file.name, file.type) ? strings.heicNotSupported : strings.unsupportedFormat);
+      return;
+    }
+
+    try {
+      await elabora(dataUrl, token);
+    } catch {
+      if (token !== selectionToken) return;
+      // HEIC che il browser non decodifica (Chrome su Android): prima di arrendersi
+      // lo converte il server, dopo il consenso come ogni foto (24/11/2026).
+      // La spunta si ricontrolla: tolta durante la decodifica, la foto non parte per il server.
+      const heic = isHeicFile(file.name, file.type);
+      // Oltre ~3 MB il server la rifiuterebbe (limite Vercel): non si manda nemmeno (rilievo Kilo #489).
+      const jpeg =
+        heic && callbacks.convertHeic && consentCheckbox.checked && file.size <= HEIC_CONVERT_MAX_BYTES
+          ? await callbacks.convertHeic(dataUrl).catch(() => null)
+          : null;
+      if (token !== selectionToken) return;
+      if (jpeg) {
+        try {
+          await elabora(jpeg, token);
+          return;
+        } catch {
+          /* il JPEG del server non si apre: messaggio come prima */
+        }
+        if (token !== selectionToken) return;
+      }
       clearPhoto();
       // Qui la decodifica è fallita davvero. Se il file era HEIC, il browser non
       // sa aprirlo (Safari 17+ sì): messaggio dedicato che dice cosa fare, non
       // il generico "formato non supportato".
-      showError(isHeicFile(file.name, file.type) ? strings.heicNotSupported : strings.unsupportedFormat);
+      // Anche per un HEIC oltre i 3 MB: «File troppo grande» direbbe «massimo 10MB» a un file da 5
+      // (rilievo Kilo #489); «convertila in JPEG» resta vero e dice cosa fare.
+      showError(heic ? strings.heicNotSupported : strings.unsupportedFormat);
+    }
+  }
+
+  async function elabora(dataUrl: string, token: number): Promise<void> {
+    // Resize UNA volta qui (2026-07-31, bug PHOTO_TOO_LARGE): photoData resta
+    // gestibile per la stima misure e per il try-on.
+    // 2026-09-22 — il gate di qualità conta i PIXEL VERI, quindi si valuta
+    // sulla foto solo ridotta; poi, per il try-on, `enlarge` porta il lato
+    // lungo a 2048 anche se la foto è più piccola (il sito promette 2K).
+    // ⚠️ Rilievo Kilo (PR #242): valutare la qualità DOPO l'ingrandimento
+    // faceva passare come «ottima» qualunque foto, perché ogni foto arrivava
+    // a 3 MP. Le due passate partono entrambe dall'originale, così la copia
+    // per il try-on non è ricodificata due volte.
+    const quality = await assessPhotoQuality(await downscalePhotoDataUrl(dataUrl));
+    const downscaled = await downscalePhotoDataUrl(dataUrl, PHOTO_MAX_EDGE_PX, true);
+    if (token !== selectionToken) return; // sorpassata da una selezione più recente
+    currentDataUrl = downscaled;
+    showPreview(downscaled);
+    showQuality(quality);
+
+    // ⚠️ Il gate di qualità sopravvive al bottone «Continua» che lo applicava:
+    // con `low` si resta qui, l'indicatore rosso dice perché, e l'acquirente
+    // ne sceglie un'altra. Con qualità accettabile si prosegue da soli — ed è
+    // qui che si risparmia il clic.
+    // ⚠️ Ricontrolla anche la spunta: fra la scelta del file e la decodifica
+    // l'acquirente può averla tolta, e quella revoca deve valere.
+    if (quality.quality !== 'low' && consentCheckbox.checked) {
+      callbacks.onPhotoReady(downscaled);
     }
   }
 

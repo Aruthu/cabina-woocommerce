@@ -1,4 +1,4 @@
-import { fetchWidgetConfig, notifySessionStart, notifySessionComplete, estimateMeasuresFromPhoto, analyzeGarmentFromUrl, fetchCatalog, tryonGenerative, sendConsentEvent, type CatalogData, type TryonIdentity } from './api/widget-api';
+import { fetchWidgetConfig, notifySessionStart, notifySessionComplete, estimateMeasuresFromPhoto, analyzeGarmentFromUrl, fetchCatalog, tryonGenerative, sendConsentEvent, convertHeicPhoto, type CatalogData, type TryonIdentity } from './api/widget-api';
 import type { SelectedGarment } from './state/types';
 import type { FashnGarmentCategory } from '@cabina/shared';
 import { resolveLanguage, loadLocale, getLocaleString, getLocaleStringOr, getLocaleStringDefault } from './i18n/i18n';
@@ -614,6 +614,8 @@ function renderState(button: HTMLElement): void {
           consentRequired: getLocaleString('photo.consent_required'),
         },
         {
+          // HEIC di Samsung/iPhone che il browser non apre: lo converte il server (24/11/2026).
+          convertHeic: (dataUrl: string) => convertHeicPhoto(apiKey, dataUrl, widgetContext.baseUrl ?? ''),
           onPhotoReady: (dataUrl: string) => {
             segnaModellaScelta(content, null);
             widgetContext = widgetReducer(widgetContext, { type: 'PHOTO_UPLOADED', dataUrl });

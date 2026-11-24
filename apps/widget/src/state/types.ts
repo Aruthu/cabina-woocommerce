@@ -1,14 +1,9 @@
 import type { Measures, FashnGarmentCategory } from '@cabina/shared';
 import type { SizeRecommendation, MeasureSource, FitPreference } from '../features/size/size-recommendation';
 
-export type GarmentCategory =
-  | 'top'
-  | 'bottom'
-  | 'dress'
-  | 'outerwear'
-  | 'footwear'
-  | 'accessory'
-  | 'unknown';
+// Definita in @cabina/shared insieme al consiglio taglia (21/11/2026).
+export type { GarmentCategory } from '@cabina/shared';
+import type { GarmentCategory } from '@cabina/shared';
 
 export interface GarmentAnalysis {
   category: GarmentCategory;

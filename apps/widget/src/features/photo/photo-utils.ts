@@ -59,6 +59,27 @@ export function isHeicFile(name: string, mimeType: string): boolean {
   );
 }
 
+/**
+ * I formati del campo file (24/11/2026).
+ *
+ * - **iPhone/iPad**: niente HEIC dichiarato, di proposito. Safari transcodifica in
+ *   JPEG all'upload solo quando l'`accept` non lo menziona.
+ * - **Tutti gli altri** (Android soprattutto): HEIC/HEIF dichiarati. Senza, il
+ *   selettore di Android NASCONDE le foto HEIC (fotocamere Samsung in «alta
+ *   efficienza»): il cliente non le vede e non riceve nemmeno un errore. Se il
+ *   browser non le apre, le converte il server (`convertHeic`, #489).
+ *
+ * iPadOS si presenta come un Mac: lo tradisce lo schermo touch. Dallo user agent
+ * («Macintosh» resta anche in quello ridotto), non da `navigator.platform`, deprecato
+ * (rilievo Kilo #490). Anche le sequenze (Live Photo, raffiche), come `isHeicFile`;
+ * niente estensioni: su Android aprirebbero il selettore di file invece della galleria.
+ */
+export function photoAccept(userAgent: string, maxTouchPoints: number): string {
+  const base = 'image/jpeg,image/png,image/webp';
+  const ios = /iPhone|iPad|iPod/.test(userAgent) || (/Macintosh/.test(userAgent) && maxTouchPoints > 1);
+  return ios ? base : `${base},image/heic,image/heif,image/heic-sequence,image/heif-sequence`;
+}
+
 /** Valida formato e dimensione del file. Ritorna risultato della validazione. */
 export function validatePhotoFile(file: File): PhotoValidationResult {
   // HEIC/HEIF: accettati qui e lasciati provare (Safari 17+ li decodifica). Se il

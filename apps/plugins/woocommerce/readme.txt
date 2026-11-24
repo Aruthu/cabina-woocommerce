@@ -5,7 +5,7 @@ Requires at least: 6.5
 Requires Plugins: woocommerce
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 1.3.8
+Stable tag: 1.3.9
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -123,6 +123,11 @@ Yes. The plugin uses standard WooCommerce hooks. If your theme does not support 
 4. The Cabina Dashboard, where you customize the widget
 
 == Changelog ==
+
+= 1.3.9 =
+
+* Widget: HEIC photos from phone cameras (Samsung, iPhone) that the browser cannot open are now converted to JPEG by Cabina, instead of showing "HEIC not supported". The photo is sent only after the shopper's consent and is not stored
+* Widget: on Android, HEIC photos now appear in the photo picker (before, the picker hid them)
 
 = 1.3.8 =
 
